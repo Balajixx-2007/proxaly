@@ -1,0 +1,265 @@
+﻿/**
+ * Leads routes
+ * Uses user-scoped Supabase client (JWT passthrough) → works with anon key + RLS
+ */
+const express = require('express')
+const router = express.Router()
+const rateLimit = require('express-rate-limit')
+const { requireAuth } = require('../middleware/auth')
+const { scrapeLeads } = require('../services/scraper')
+const { enrichLead, enrichLeadsBatch } = require('../services/groq')
+const { findEmail } = require('../services/emailFinder')
+const { getClient } = require('../services/supabase')
+const { v4: uuidv4 } = require('uuid')
+
+const scrapeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: 'Too many scrape requests. Please wait 1 minute.' },
+})
+
+// ── GET /api/leads ────────────────────────────────────────────────────────────
+router.get('/', requireAuth, async (req, res) => {
+  try {
+    const { limit = 100, offset = 0, status, orderBy = 'created_at', order = 'desc' } = req.query
+    const db = getClient(req)
+
+    let query = db
+      .from('leads')
+      .select('*', { count: 'exact' })
+      .order(orderBy, { ascending: order === 'asc' })
+      .range(Number(offset), Number(offset) + Number(limit) - 1)
+
+    if (status && status !== 'all') {
+      query = query.eq('status', status)
+    }
+
+    const { data: leads, error, count } = await query
+
+    if (error) throw error
+    res.json({ leads: leads || [], total: count || 0 })
+  } catch (err) {
+    console.error('GET /leads error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── POST /api/leads/scrape ────────────────────────────────────────────────────
+router.post('/scrape', requireAuth, scrapeLimiter, async (req, res) => {
+  const { businessType, city, source = 'google_maps', maxResults = 15 } = req.body
+
+  if (!businessType?.trim() || !city?.trim()) {
+    return res.status(400).json({ error: 'businessType and city are required' })
+  }
+
+  try {
+    const rawLeads = await scrapeLeads({
+      businessType: businessType.trim(),
+      city: city.trim(),
+      source,
+      maxResults: Math.min(Number(maxResults), 30),
+    })
+
+    if (!rawLeads.length) {
+      return res.json({ leads: [], message: 'No leads found. Try a different source or search term.' })
+    }
+
+    const db = getClient(req)
+    const leadsToInsert = rawLeads.map(lead => ({
+      ...lead,
+      id: uuidv4(),
+      user_id: req.user.id,
+    }))
+
+    const { data: saved, error } = await db
+      .from('leads')
+      .insert(leadsToInsert)
+      .select()
+
+    if (error) {
+      console.warn('DB insert failed:', error.message)
+      // Return results even if DB save fails (e.g. tables not created yet)
+      return res.json({
+        leads: rawLeads,
+        saved: false,
+        message: 'Scraped successfully! Run the SQL schema in Supabase to save leads permanently.'
+      })
+    }
+
+    res.json({ leads: saved || rawLeads, total: (saved || rawLeads).length })
+  } catch (err) {
+    console.error('Scrape error:', err.message)
+    res.status(500).json({ error: `Scraping failed: ${err.message}` })
+  }
+})
+
+// ── POST /api/leads/bulk-enrich ───────────────────────────────────────────────
+router.post('/bulk-enrich', requireAuth, async (req, res) => {
+  const { ids } = req.body
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'Provide an array of lead IDs' })
+  }
+  if (ids.length > 20) {
+    return res.status(400).json({ error: 'Maximum 20 leads per bulk enrichment' })
+  }
+
+  try {
+    const db = getClient(req)
+    const { data: leads, error } = await db
+      .from('leads')
+      .select('*')
+      .in('id', ids)
+
+    if (error) throw error
+
+    const results = await enrichLeadsBatch(leads || [])
+    const updated = []
+
+    for (const result of results) {
+      if (!result.success) continue
+      const { id, success, error: _e, ...enrichData } = result
+      const { data } = await db
+        .from('leads')
+        .update({ ...enrichData, enriched_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+      if (data) updated.push(data)
+    }
+
+    res.json({ leads: updated, enriched: updated.length, failed: results.filter(r => !r.success).length })
+  } catch (err) {
+    console.error('Bulk enrich error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── GET /api/leads/export ─────────────────────────────────────────────────────
+router.get('/export', requireAuth, async (req, res) => {
+  const { status } = req.query
+  const db = getClient(req)
+
+  try {
+    let query = db.from('leads').select('*').order('created_at', { ascending: false })
+    if (status && status !== 'all') query = query.eq('status', status)
+
+    const { data: leads, error } = await query
+    if (error) throw error
+
+    const cols = ['name', 'city', 'address', 'phone', 'website', 'rating', 'ai_score', 'status', 'outreach_message', 'source', 'created_at']
+    const escape = v => `"${String(v || '').replace(/"/g, '""')}"`
+
+    const csv = [
+      cols.join(','),
+      ...(leads || []).map(lead => cols.map(col => escape(lead[col])).join(','))
+    ].join('\n')
+
+    res.setHeader('Content-Type', 'text/csv')
+    res.setHeader('Content-Disposition', `attachment; filename="Proxaly_leads_${Date.now()}.csv"`)
+    res.send(csv)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── POST /api/leads/:id/enrich ────────────────────────────────────────────────
+router.post('/:id/enrich', requireAuth, async (req, res) => {
+  const { id } = req.params
+  const db = getClient(req)
+
+  try {
+    const { data: lead, error } = await db.from('leads').select('*').eq('id', id).single()
+    if (error || !lead) return res.status(404).json({ error: 'Lead not found' })
+
+    const enriched = await enrichLead(lead)
+
+    const updateData = { ...enriched, enriched_at: new Date().toISOString() }
+    // Remove null email so it doesn't overwrite existing one
+    if (!updateData.email) delete updateData.email
+
+    const { data: updated, error: updateError } = await db
+      .from('leads')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
+
+    res.json({ lead: updateError ? { ...lead, ...enriched } : updated })
+  } catch (err) {
+    console.error('Enrich error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── POST /api/leads/:id/find-email ───────────────────────────────────────────
+router.post('/:id/find-email', requireAuth, async (req, res) => {
+  const { id } = req.params
+  const db = getClient(req)
+
+  try {
+    const { data: lead, error } = await db.from('leads').select('*').eq('id', id).single()
+    if (error || !lead) return res.status(404).json({ error: 'Lead not found' })
+
+    const email = await findEmail(lead)
+
+    if (email) {
+      const { data: updated } = await db
+        .from('leads')
+        .update({ email, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+      res.json({ email, lead: updated || { ...lead, email } })
+    } else {
+      res.json({ email: null, message: 'Could not find email for this business' })
+    }
+  } catch (err) {
+    console.error('Find email error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── PATCH /api/leads/:id ──────────────────────────────────────────────────────
+router.patch('/:id', requireAuth, async (req, res) => {
+  const { id } = req.params
+  const allowed = ['status', 'notes', 'name', 'phone', 'website', 'address', 'city']
+  const updates = {}
+  for (const key of allowed) {
+    if (key in req.body) updates[key] = req.body[key]
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'No valid fields to update' })
+  }
+
+  try {
+    const db = getClient(req)
+    const { data, error } = await db
+      .from('leads')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    res.json({ lead: data })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── DELETE /api/leads/:id ─────────────────────────────────────────────────────
+router.delete('/:id', requireAuth, async (req, res) => {
+  const { id } = req.params
+  try {
+    const db = getClient(req)
+    const { error } = await db.from('leads').delete().eq('id', id)
+    if (error) throw error
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+module.exports = router
