@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Proxaly Backend — Express server
  * Handles lead scraping, AI enrichment, and campaign management
  */
@@ -27,7 +27,8 @@ app.use(cors({
   origin: [
     process.env.FRONTEND_URL || 'http://localhost:5173',
     'http://localhost:3000',
-    /vercel\.app$/,  // Vercel preview URLs
+    'https://proxaly.vercel.app',
+    /\.vercel\.app$/,  // Vercel preview URLs
   ],
   credentials: true,
 }))
