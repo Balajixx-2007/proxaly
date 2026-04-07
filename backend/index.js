@@ -15,6 +15,7 @@ const leadsRouter = require('./routes/leads')
 const campaignsRouter = require('./routes/campaigns')
 const enrichRouter = require('./routes/enrich')
 const authRouter = require('./routes/auth')
+const automationRouter = require('./routes/automation')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -64,6 +65,7 @@ app.use('/api/leads', leadsRouter)
 app.use('/api/campaigns', campaignsRouter)
 app.use('/api/enrich', enrichRouter)
 app.use('/api/auth', authRouter)
+app.use('/api/automation', automationRouter);
 
 // ── 404 handler ──────────────────────────────────────────────────────────────
 app.use('*', (req, res) => {
@@ -79,6 +81,10 @@ app.use((err, req, res, next) => {
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   })
 })
+
+// ── Initialize automation service ────────────────────────────────────────────
+const automationService = require('./services/automation')
+automationService.init()
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

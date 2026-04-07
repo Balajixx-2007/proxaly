@@ -1,4 +1,4 @@
-﻿// Main App — routing + auth guard
+// Main App — routing + auth guard
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -9,6 +9,7 @@ import Leads from './pages/Leads'
 import Campaigns from './pages/Campaigns'
 import Billing from './pages/Billing'
 import Settings from './pages/Settings'
+import Automation from './pages/Automation'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -51,6 +52,7 @@ function AppRoutes() {
                 <Route path="/leads" element={<Leads />} />
                 <Route path="/campaigns" element={<Campaigns />} />
                 <Route path="/billing" element={<Billing />} />
+                <Route path="/automation" element={<Automation />} />
                 <Route path="/settings" element={<Settings />} />
               </Routes>
             </Layout>

@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import {
   Search, Zap, Download, Filter, ChevronDown, ChevronUp,
   Globe, Phone, MapPin, Sparkles, Loader2, Trash2,
-  CheckCircle, Clock, RefreshCw, Mail
+  CheckCircle, Clock, RefreshCw, Mail, Send, AlertCircle, MoreVertical
 } from 'lucide-react'
 
 const STATUS_OPTIONS = ['new', 'contacted', 'converted']
@@ -98,9 +98,10 @@ function SearchForm({ onResults, loading, setLoading }) {
   )
 }
 
-function LeadRow({ lead, onStatusChange, onEnrich, onFindEmail, onDelete, selected, onSelect }) {
+function LeadRow({ lead, onStatusChange, onEnrich, onFindEmail, onDelete, selected, onSelect, onSendToAgent }) {
   const [enriching, setEnriching] = useState(false)
   const [findingEmail, setFindingEmail] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
   const scoreColor = !lead.ai_score ? 'rgba(148,163,184,0.4)'
     : lead.ai_score >= 7 ? '#4ade80'
     : lead.ai_score >= 4 ? '#fbbf24'
@@ -114,6 +115,11 @@ function LeadRow({ lead, onStatusChange, onEnrich, onFindEmail, onDelete, select
   const handleFindEmail = async () => {
     setFindingEmail(true)
     try { await onFindEmail(lead.id) } finally { setFindingEmail(false) }
+  }
+
+  const handleSendOne = async () => {
+    setShowMenu(false)
+    await onSendToAgent([lead.id])
   }
 
   return (
@@ -204,11 +210,36 @@ function LeadRow({ lead, onStatusChange, onEnrich, onFindEmail, onDelete, select
           ))}
         </select>
       </td>
-      <td>
-        <button onClick={() => onDelete(lead.id)} className="btn btn-danger"
-          style={{ padding: '4px 8px', fontSize: 12 }}>
-          <Trash2 size={12} />
-        </button>
+      <td style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button onClick={() => setShowMenu(!showMenu)} className="btn btn-ghost"
+            style={{ padding: '4px 8px', fontSize: 12, position: 'relative' }}>
+            <MoreVertical size={12} />
+          </button>
+          {showMenu && (
+            <div style={{
+              position: 'absolute', right: 0, top: '100%', marginTop: 4,
+              background: '#1e293b', border: '1px solid rgba(139,92,246,0.2)',
+              borderRadius: 6, padding: '4px 0', zIndex: 100, minWidth: 140,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            }}>
+              <button onClick={handleSendOne} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                width: '100%', border: 'none', background: 'transparent', color: '#a78bfa',
+                cursor: 'pointer', fontSize: 12, textAlign: 'left'
+              }}>
+                <Send size={12} /> Send to Agent
+              </button>
+              <button onClick={() => { onDelete(lead.id); setShowMenu(false) }} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                width: '100%', border: 'none', background: 'transparent', color: '#f87171',
+                cursor: 'pointer', fontSize: 12, textAlign: 'left'
+              }}>
+                <Trash2 size={12} /> Delete
+              </button>
+            </div>
+          )}
+        </div>
       </td>
     </tr>
   )
@@ -224,8 +255,29 @@ export default function Leads() {
   const [textFilter, setTextFilter] = useState('')      // search box filter
   const [lastSearch, setLastSearch] = useState(null)   // { businessType, city }
   const [bulkEnriching, setBulkEnriching] = useState(false)
+  // Marketing Agent integration
+  const [agentStatus, setAgentStatus] = useState({ status: 'offline' })
+  const [sendingToAgent, setSendingToAgent] = useState(false)
 
   useEffect(() => { fetchLeads() }, [])
+
+  // Poll agent status every 30 seconds
+  useEffect(() => {
+    const pollAgent = async () => {
+      try {
+        const res = await leadsApi.getAgentStatus()
+        setAgentStatus(res.data || { status: 'offline' })
+        console.log('[Agent Status]', res.data)
+      } catch (err) {
+        console.warn('[Agent Status] Could not fetch:', err.message)
+        setAgentStatus({ status: 'offline' })
+      }
+    }
+
+    pollAgent() // Poll immediately
+    const interval = setInterval(pollAgent, 30000) // Then every 30s
+    return () => clearInterval(interval)
+  }, [])
 
   async function fetchLeads() {
     setFetching(true)
@@ -303,6 +355,51 @@ export default function Leads() {
       await leadsApi.delete(id)
     } catch {
       toast.error('Failed to delete')
+    }
+  }
+
+  const handleSendToAgent = async (leadIds) => {
+    if (!leadIds || leadIds.length === 0) {
+      return toast.error('Select leads first')
+    }
+
+    setSendingToAgent(true)
+    try {
+      console.log(`Sending ${leadIds.length} lead(s) to Marketing Agent...`)
+      const res = await leadsApi.sendToAgent(leadIds)
+      const { sent, failed, total } = res.data || {}
+
+      if (sent && sent > 0) {
+        toast.success(`✅ ${sent} lead${sent !== 1 ? 's' : ''} sent to Marketing Agent!`, { duration: 4000 })
+        console.log(`[Marketing Agent] Successfully sent ${sent}/${total} leads`)
+        
+        // Clear selection after success
+        if (leadIds.every(id => selected.has(id))) {
+          setSelected(new Set())
+        }
+        
+        // Poll agent status to verify it started
+        setTimeout(async () => {
+          try {
+            const status = await leadsApi.getAgentStatus()
+            setAgentStatus(status.data || { status: 'offline' })
+            if (status.data?.running) {
+              toast.success('🚀 Marketing Agent is now running!', { duration: 3000 })
+            }
+          } catch (e) {
+            // Silently fail if can't check status
+          }
+        }, 1000)
+      }
+
+      if (failed && failed > 0) {
+        toast.error(`⚠️ Failed to send ${failed} lead(s). Ensure they have emails.`, { duration: 4000 })
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to send leads. Is Marketing Agent running?', { duration: 5000 })
+      console.error('[Send to Agent Error]', err.message)
+    } finally {
+      setSendingToAgent(false)
     }
   }
 
@@ -453,7 +550,41 @@ export default function Leads() {
             </button>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {/* Agent Status Indicator */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+            borderRadius: 6, background: 'rgba(139,92,246,0.08)',
+            border: '1px solid rgba(139,92,246,0.15)', fontSize: 12
+          }}>
+            <div style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: agentStatus.status === 'offline' ? '#f87171' : '#4ade80',
+              boxShadow: agentStatus.status === 'offline' ? '0 0 0 2px rgba(248,113,113,0.2)' : '0 0 0 2px rgba(74,222,128,0.2)'
+            }}></div>
+            <span style={{ color: agentStatus.status === 'offline' ? '#f87171' : '#4ade80' }}>
+              {agentStatus.status === 'offline' ? 'Agent Offline' : `Agent Running (${(agentStatus.tickCount || 0)} ticks)`}
+            </span>
+          </div>
+          
+          {selected.size > 0 && (
+            <button
+              onClick={() => handleSendToAgent([...selected])}
+              disabled={sendingToAgent}
+              id="send-to-agent"
+              style={{
+                padding: '8px 14px', fontSize: 13, fontWeight: 500,
+                background: 'linear-gradient(135deg, #a78bfa, #8b5cf6)',
+                border: 'none', borderRadius: 6, color: '#fff',
+                cursor: sendingToAgent ? 'not-allowed' : 'pointer',
+                opacity: sendingToAgent ? 0.7 : 1,
+                display: 'flex', alignItems: 'center', gap: 6
+              }}
+            >
+              {sendingToAgent ? <Loader2 size={14} className="spinner" /> : <Send size={14} />}
+              Send {selected.size} to Agent
+            </button>
+          )}
           {selected.size > 0 && (
             <button
               onClick={handleBulkEnrich}
@@ -520,6 +651,7 @@ export default function Leads() {
                     onEnrich={handleEnrich}
                     onFindEmail={handleFindEmail}
                     onDelete={handleDelete}
+                    onSendToAgent={handleSendToAgent}
                   />
                 ))}
               </tbody>

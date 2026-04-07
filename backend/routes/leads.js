@@ -262,4 +262,152 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 })
 
+// ── POST /api/leads/send-to-agent ────────────────────────────────────────────
+/**
+ * Send selected leads to Marketing Agent
+ * Body: { leadIds: [...] }
+ * 1. Fetch leads from Supabase
+ * 2. Format for Marketing Agent
+ * 3. Send each lead individually
+ * 4. Start marketing agent
+ * 5. Return success/failed counts
+ */
+router.post('/send-to-agent', requireAuth, async (req, res) => {
+  const { leadIds } = req.body
+
+  if (!Array.isArray(leadIds) || leadIds.length === 0) {
+    return res.status(400).json({ error: 'Provide an array of lead IDs' })
+  }
+
+  if (leadIds.length > 100) {
+    return res.status(400).json({ error: 'Maximum 100 leads per send' })
+  }
+
+  const marketingAgentUrl = process.env.MARKETING_AGENT_URL || 'http://localhost:3000'
+
+  try {
+    const db = getClient(req)
+    const { data: leads, error } = await db
+      .from('leads')
+      .select('*')
+      .in('id', leadIds)
+
+    if (error) throw error
+    if (!leads || leads.length === 0) {
+      return res.status(404).json({ error: 'No leads found' })
+    }
+
+    console.log(`[Marketing Agent] Sending ${leads.length} leads to ${marketingAgentUrl}`)
+
+    let sent = 0
+    let failed = 0
+    const errors = []
+
+    // Send each lead individually to Marketing Agent
+    for (const lead of leads) {
+      try {
+        const payload = {
+          name: lead.name || 'Unknown',
+          email: lead.email || '',
+          company: lead.city || lead.address || '',
+          phone: lead.phone || '',
+          website: lead.website || '',
+          observation: lead.ai_summary || lead.outreach_message || lead.notes || ''
+        }
+
+        // Skip if no email
+        if (!payload.email) {
+          console.log(`[Marketing Agent] Skipping ${lead.name} - no email`)
+          failed++
+          continue
+        }
+
+        const response = await fetch(`${marketingAgentUrl}/api/leads`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          timeout: 5000
+        })
+
+        if (response.ok) {
+          sent++
+          console.log(`[Marketing Agent] ✅ Sent: ${lead.name} (${lead.email})`)
+        } else {
+          failed++
+          errors.push(`${lead.name}: ${await response.text()}`)
+          console.log(`[Marketing Agent] ❌ Failed: ${lead.name} - ${response.status}`)
+        }
+      } catch (err) {
+        failed++
+        errors.push(`${lead.name}: ${err.message}`)
+        console.error(`[Marketing Agent] Send error for ${lead.name}:`, err.message)
+      }
+    }
+
+    // Start marketing agent after sending leads
+    if (sent > 0) {
+      try {
+        console.log(`[Marketing Agent] Starting agent loop...`)
+        await fetch(`${marketingAgentUrl}/api/agent/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 5000
+        })
+        console.log(`[Marketing Agent] ✅ Agent started`)
+      } catch (err) {
+        console.warn(`[Marketing Agent] Could not start agent:`, err.message)
+        // Don't fail the whole operation if agent start fails
+      }
+    }
+
+    res.json({
+      success: true,
+      sent,
+      failed,
+      total: leads.length,
+      errors: errors.length > 0 ? errors : undefined,
+      message: `Sent ${sent}/${leads.length} leads to Marketing Agent`
+    })
+
+  } catch (err) {
+    console.error('Send to agent error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── GET /api/agent/status ───────────────────────────────────────────────────
+/**
+ * Proxy Marketing Agent status
+ * Returns: { running, tickCount, lastRunTime, status }
+ */
+router.get('/agent/status', requireAuth, async (req, res) => {
+  const marketingAgentUrl = process.env.MARKETING_AGENT_URL || 'http://localhost:3000'
+
+  try {
+    console.log(`[Marketing Agent] Fetching status from ${marketingAgentUrl}`)
+    
+    const response = await fetch(`${marketingAgentUrl}/api/agent/status`, {
+      timeout: 5000
+    })
+
+    if (!response.ok) {
+      console.warn(`[Marketing Agent] Status check failed: ${response.status}`)
+      return res.status(503).json({
+        error: 'Marketing Agent unreachable',
+        status: 'offline'
+      })
+    }
+
+    const data = await response.json()
+    res.json(data)
+  } catch (err) {
+    console.error('[Marketing Agent] Status check error:', err.message)
+    res.status(503).json({
+      error: 'Marketing Agent unreachable',
+      status: 'offline',
+      details: err.message
+    })
+  }
+})
+
 module.exports = router

@@ -1,0 +1,39 @@
+{
+  "running": false,
+  "lastRun": null,
+  "nextRun": null,
+  "totalLeadsToday": 0,
+  "totalSentToday": 0,
+  "currentlyRunning": false,
+  "logs": [
+    "[2026-04-06 18:40:49] INFO: Automation service initialized",
+    "[2026-04-06 18:50:58] INFO: Automation service initialized",
+    "[2026-04-06 18:54:37] INFO: Automation service initialized",
+    "[2026-04-07 07:18:50] INFO: Automation service initialized"
+  ],
+  "targets": [
+    {
+      "businessType": "digital marketing agency",
+      "city": "New York"
+    },
+    {
+      "businessType": "digital marketing agency",
+      "city": "Los Angeles"
+    },
+    {
+      "businessType": "dental clinic",
+      "city": "New York"
+    },
+    {
+      "businessType": "real estate agent",
+      "city": "Miami"
+    },
+    {
+      "businessType": "law firm",
+      "city": "Chicago"
+    }
+  ],
+  "scheduleHours": 6,
+  "minScore": 7,
+  "enabled": false
+}

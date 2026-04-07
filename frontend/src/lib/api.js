@@ -30,6 +30,9 @@ export const leadsApi = {
   findEmail: (id) => api.post(`/leads/${id}/find-email`),
   bulkEnrich: (ids) => api.post('/leads/bulk-enrich', { ids }),
   export: (params) => api.get('/leads/export', { params, responseType: 'blob' }),
+  // Marketing Agent integration
+  sendToAgent: (leadIds) => api.post('/leads/send-to-agent', { leadIds }),
+  getAgentStatus: () => api.get('/leads/agent/status'),
 }
 
 // ----- Campaigns -----
