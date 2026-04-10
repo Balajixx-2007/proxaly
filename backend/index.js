@@ -17,6 +17,8 @@ const enrichRouter = require('./routes/enrich')
 const authRouter = require('./routes/auth')
 const automationRouter = require('./routes/automation')
 const billingRouter = require('./routes/billing')
+const clientsRouter = require('./routes/clients')
+
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -69,6 +71,7 @@ app.use('/api/enrich', enrichRouter)
 app.use('/api/auth', authRouter)
 app.use('/api/automation', automationRouter);
 app.use('/api/billing', billingRouter);
+app.use('/api/clients', clientsRouter);
 
 
 // ── 404 handler ──────────────────────────────────────────────────────────────

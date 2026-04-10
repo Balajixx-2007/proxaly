@@ -1,4 +1,3 @@
-// Main App — routing + auth guard
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -10,6 +9,8 @@ import Campaigns from './pages/Campaigns'
 import Billing from './pages/Billing'
 import Settings from './pages/Settings'
 import Automation from './pages/Automation'
+import Clients from './pages/Clients'
+import ClientPortal from './pages/ClientPortal'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -37,11 +38,11 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route
-        path="/login"
-        element={user ? <Navigate to="/dashboard" replace /> : <Login />}
-      />
+      {/* Public routes */}
+      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/client/:token" element={<ClientPortal />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      {/* Protected routes */}
       <Route
         path="/*"
         element={
@@ -51,6 +52,7 @@ function AppRoutes() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/leads" element={<Leads />} />
                 <Route path="/campaigns" element={<Campaigns />} />
+                <Route path="/clients" element={<Clients />} />
                 <Route path="/billing" element={<Billing />} />
                 <Route path="/automation" element={<Automation />} />
                 <Route path="/settings" element={<Settings />} />

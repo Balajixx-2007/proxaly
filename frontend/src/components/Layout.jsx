@@ -1,17 +1,18 @@
-﻿// Sidebar + Layout shell
+// Sidebar + Layout shell
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import {
   LayoutDashboard, Users, Megaphone, CreditCard, Settings,
-  LogOut, Zap, ChevronLeft, ChevronRight, Menu, X
+  LogOut, Zap, ChevronLeft, ChevronRight, Menu, X, Building2
 } from 'lucide-react'
 
 const NAV = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/leads', icon: Users, label: 'Leads' },
   { to: '/campaigns', icon: Megaphone, label: 'Campaigns' },
+  { to: '/clients', icon: Building2, label: 'Clients' },
   { to: '/billing', icon: CreditCard, label: 'Billing' },
   { to: '/automation', icon: Zap, label: 'Automation' },
   { to: '/settings', icon: Settings, label: 'Settings' },
