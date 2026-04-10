@@ -56,12 +56,42 @@ export default function ClientPortal() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [branding, setBranding] = useState({
+    name: 'Proxaly',
+    tagline: 'AI-Powered Lead Generation & Outreach',
+    logoUrl: '',
+    primaryColor: '#7c3aed',
+    accentColor: '#22d3ee',
+    footerText: '',
+    supportEmail: 'support@proxaly.app',
+    websiteUrl: 'https://proxaly.app',
+    hideProxaly: false,
+  })
 
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await api.get(`/clients/portal/${token}`)
-        setData(res.data)
+        const [clientRes, brandingRes] = await Promise.all([
+          api.get(`/clients/portal/${token}`),
+          api.get(`/branding/portal/${token}`).catch(() => ({ data: null }))
+        ])
+        setData(clientRes.data)
+
+        // Apply branding
+        const b = brandingRes.data
+        if (b) {
+          setBranding({
+            name: b.agency_name || 'Proxaly',
+            tagline: b.agency_tagline || 'AI-Powered Lead Generation & Outreach',
+            logoUrl: b.logo_url || '',
+            primaryColor: b.primary_color || '#7c3aed',
+            accentColor: b.accent_color || '#22d3ee',
+            footerText: b.footer_text || '',
+            supportEmail: b.support_email || 'support@proxaly.app',
+            websiteUrl: b.website_url || 'https://proxaly.app',
+            hideProxaly: b.hide_proxaly_branding || false,
+          })
+        }
       } catch (err) {
         setError(err.response?.data?.error || 'Portal not found')
       }
@@ -69,6 +99,7 @@ export default function ClientPortal() {
     }
     load()
   }, [token])
+
 
   if (loading) return (
     <div style={{ minHeight: '100vh', background: '#050814', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -105,9 +136,13 @@ export default function ClientPortal() {
       {/* Top bar / header */}
       <div style={{ borderBottom: '1px solid rgba(139,92,246,0.1)', padding: '16px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(5,8,20,0.8)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #7c3aed, #22d3ee)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>⚡</div>
+          {branding.logoUrl ? (
+            <img src={branding.logoUrl} alt={branding.name} style={{ height: 32, borderRadius: 6, objectFit: 'contain' }} onError={e => e.target.style.display='none'} />
+          ) : (
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg, ${branding.primaryColor}, ${branding.accentColor})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>⚡</div>
+          )}
           <div>
-            <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 800, fontSize: 15, color: '#e2e8f0' }}>Proxaly</div>
+            <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 800, fontSize: 15, color: '#e2e8f0' }}>{branding.name}</div>
             <div style={{ fontSize: 11, color: 'rgba(148,163,184,0.4)' }}>Client Report Portal</div>
           </div>
         </div>
@@ -122,11 +157,11 @@ export default function ClientPortal() {
         {/* Welcome */}
         <div style={{ marginBottom: 36, textAlign: 'center' }}>
           <div style={{ width: 60, height: 60, borderRadius: 16, background: 'linear-gradient(135deg, rgba(124,58,237,0.2), rgba(34,211,238,0.2))', border: '1px solid rgba(139,92,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28 }}>🏢</div>
-          <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 28, fontWeight: 800, margin: '0 0 8px', background: 'linear-gradient(135deg, #e2e8f0, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 28, fontWeight: 800, margin: '0 0 8px', background: `linear-gradient(135deg, #e2e8f0, ${branding.primaryColor})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             {client.businessName || client.name} — Campaign Report
           </h1>
           <p style={{ color: 'rgba(148,163,184,0.5)', fontSize: 14, margin: 0 }}>
-            Your AI-powered outreach campaign managed by Proxaly
+            Your AI-powered outreach campaign managed by {branding.name}
           </p>
           <div style={{ display: 'inline-flex', gap: 8, marginTop: 12 }}>
             <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(34,211,238,0.1)', color: '#22d3ee', border: '1px solid rgba(34,211,238,0.2)' }}>

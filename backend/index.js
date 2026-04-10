@@ -20,6 +20,7 @@ const billingRouter = require('./routes/billing')
 const clientsRouter = require('./routes/clients')
 const { router: analyticsRouter } = require('./routes/analytics')
 const channelsRouter = require('./routes/channels')
+const { router: brandingRouter } = require('./routes/branding')
 
 
 const app = express()
@@ -76,6 +77,7 @@ app.use('/api/billing', billingRouter);
 app.use('/api/clients', clientsRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/channels', channelsRouter);
+app.use('/api/branding', brandingRouter);
 
 
 // ── 404 handler ──────────────────────────────────────────────────────────────
