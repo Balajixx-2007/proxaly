@@ -339,11 +339,51 @@ cron.schedule('0 0 * * *', () => {
   saveState()
 })
 
+// ── Weekly Report — every Monday at 8:00 AM ───────────────────────────────
+cron.schedule('0 8 * * 1', async () => {
+  const reportEmail = process.env.REPORT_EMAIL
+  const brevoKey = process.env.BREVO_API_KEY
+  if (!reportEmail || !brevoKey) {
+    log('⚠️ Weekly report skipped — REPORT_EMAIL or BREVO_API_KEY not set')
+    return
+  }
+
+  try {
+    log('📊 Generating weekly report...')
+    const { buildReportHTML, sendReportEmail } = require('../routes/analytics')
+
+    // Pull last 7 days of leads from Supabase
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: leads } = await supabaseAdmin
+      .from('leads')
+      .select('status, score, created_at')
+      .gte('created_at', since)
+
+    const all = leads || []
+    const stats = {
+      scraped: all.length,
+      contacted: all.filter(l => ['Contacted', 'Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
+      replied: all.filter(l => ['Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
+      meetings: all.filter(l => l.status === 'Meeting Booked').length,
+    }
+
+    const label = `Week of ${new Date(since).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`
+    const html = buildReportHTML(stats, label)
+    await sendReportEmail(reportEmail, html, brevoKey)
+
+    log(`✅ Weekly report sent to ${reportEmail}`)
+  } catch (err) {
+    log(`❌ Weekly report failed: ${err.message}`)
+  }
+})
+
+
 function init() {
   loadState()
   if (automationState.enabled) startAutomation()
   log('Automation service initialized')
 }
+
 
 module.exports = {
   init,

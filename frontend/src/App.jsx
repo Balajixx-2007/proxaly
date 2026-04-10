@@ -11,6 +11,7 @@ import Settings from './pages/Settings'
 import Automation from './pages/Automation'
 import Clients from './pages/Clients'
 import ClientPortal from './pages/ClientPortal'
+import Analytics from './pages/Analytics'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -53,6 +54,7 @@ function AppRoutes() {
                 <Route path="/leads" element={<Leads />} />
                 <Route path="/campaigns" element={<Campaigns />} />
                 <Route path="/clients" element={<Clients />} />
+                <Route path="/analytics" element={<Analytics />} />
                 <Route path="/billing" element={<Billing />} />
                 <Route path="/automation" element={<Automation />} />
                 <Route path="/settings" element={<Settings />} />
