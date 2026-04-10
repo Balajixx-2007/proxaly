@@ -19,6 +19,7 @@ const automationRouter = require('./routes/automation')
 const billingRouter = require('./routes/billing')
 const clientsRouter = require('./routes/clients')
 const { router: analyticsRouter } = require('./routes/analytics')
+const channelsRouter = require('./routes/channels')
 
 
 const app = express()
@@ -74,6 +75,7 @@ app.use('/api/automation', automationRouter);
 app.use('/api/billing', billingRouter);
 app.use('/api/clients', clientsRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/channels', channelsRouter);
 
 
 // ── 404 handler ──────────────────────────────────────────────────────────────
