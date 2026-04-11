@@ -8,7 +8,7 @@ import {
   CheckCircle, Clock, RefreshCw, Mail, Send, AlertCircle, MoreVertical
 } from 'lucide-react'
 
-const STATUS_OPTIONS = ['new', 'contacted', 'converted']
+const STATUS_OPTIONS = ['new', 'contacted', 'replied', 'meeting_booked', 'client', 'converted']
 
 function SearchForm({ onResults, loading, setLoading }) {
   const [businessType, setBusinessType] = useState('')

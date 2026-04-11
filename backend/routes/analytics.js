@@ -18,7 +18,7 @@ router.get('/overview', requireAuth, async (req, res) => {
     // All leads in period
     const { data: leads, error } = await db
       .from('leads')
-      .select('id, status, score, source, niche, created_at, contacted_at, enriched')
+      .select('id, status, ai_score, source, niche, created_at, enriched_at')
       .gte('created_at', since)
 
     if (error) throw error
@@ -48,7 +48,7 @@ router.get('/overview', requireAuth, async (req, res) => {
     // Score distribution
     const scoreDistribution = { low: 0, medium: 0, high: 0 }
     all.forEach(l => {
-      const s = l.score || 0
+      const s = l.ai_score || 0
       if (s >= 8) scoreDistribution.high++
       else if (s >= 5) scoreDistribution.medium++
       else scoreDistribution.low++
@@ -66,11 +66,11 @@ router.get('/overview', requireAuth, async (req, res) => {
     // Conversion funnel
     const funnel = {
       scraped: all.length,
-      enriched: all.filter(l => l.enriched).length,
-      contacted: all.filter(l => ['Contacted', 'Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      replied: all.filter(l => ['Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      meetings: all.filter(l => l.status === 'Meeting Booked').length,
-      clients: all.filter(l => l.status === 'Client').length,
+      enriched: all.filter(l => !!l.enriched_at).length,
+      contacted: all.filter(l => ['contacted', 'replied', 'meeting_booked', 'client'].includes(l.status)).length,
+      replied: all.filter(l => ['replied', 'meeting_booked', 'client'].includes(l.status)).length,
+      meetings: all.filter(l => l.status === 'meeting_booked').length,
+      clients: all.filter(l => l.status === 'client').length,
     }
 
     // Rates
@@ -79,7 +79,7 @@ router.get('/overview', requireAuth, async (req, res) => {
     const enrichRate = funnel.scraped > 0 ? Math.round((funnel.enriched / funnel.scraped) * 100) : 0
 
     // Avg quality score
-    const scores = all.map(l => l.score || 0).filter(s => s > 0)
+    const scores = all.map(l => l.ai_score || 0).filter(s => s > 0)
     const avgScore = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0
 
     res.json({
@@ -135,14 +135,14 @@ router.post('/report/send', requireAuth, async (req, res) => {
 
     // Get analytics data
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const { data: leads } = await db.from('leads').select('status, score, created_at').gte('created_at', since)
+    const { data: leads } = await db.from('leads').select('status, ai_score, created_at').gte('created_at', since)
     const all = leads || []
 
     const stats = {
       scraped: all.length,
-      contacted: all.filter(l => ['Contacted', 'Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      replied: all.filter(l => ['Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      meetings: all.filter(l => l.status === 'Meeting Booked').length,
+      contacted: all.filter(l => ['contacted', 'replied', 'meeting_booked', 'client'].includes(l.status)).length,
+      replied: all.filter(l => ['replied', 'meeting_booked', 'client'].includes(l.status)).length,
+      meetings: all.filter(l => l.status === 'meeting_booked').length,
     }
 
     // Send report email via Brevo
@@ -208,18 +208,15 @@ function buildReportHTML(stats, label = 'Last 7 Days') {
 }
 
 async function sendReportEmail(toEmail, html, brevoKey) {
-  const fetch = require('node-fetch')
-  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: { 'api-key': brevoKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sender: { name: 'Proxaly', email: process.env.BREVO_SENDER_EMAIL || 'reports@proxaly.app' },
-      to: [{ email: toEmail }],
-      subject: `📊 Proxaly Weekly Report — ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`,
-      htmlContent: html,
-    })
+  const axios = require('axios')
+  await axios.post('https://api.brevo.com/v3/smtp/email', {
+    sender: { name: 'Proxaly', email: process.env.BREVO_SENDER_EMAIL || 'reports@proxaly.app' },
+    to: [{ email: toEmail }],
+    subject: `📊 Proxaly Weekly Report — ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`,
+    htmlContent: html,
+  }, {
+    headers: { 'api-key': brevoKey, 'Content-Type': 'application/json' }
   })
-  if (!res.ok) throw new Error(await res.text())
 }
 
 module.exports = { router, buildReportHTML, sendReportEmail }

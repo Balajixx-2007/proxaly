@@ -33,7 +33,7 @@ create table if not exists leads (
   enriched_at     timestamptz,
 
   -- CRM
-  status          text default 'new' check (status in ('new', 'contacted', 'converted')),
+  status          text default 'new' check (status in ('new', 'contacted', 'replied', 'meeting_booked', 'client', 'converted')),
   notes           text,
 
   -- Timestamps
@@ -117,3 +117,9 @@ create trigger leads_updated_at
 create trigger campaigns_updated_at
   before update on campaigns
   for each row execute function update_updated_at();
+
+
+-- ── MIGRATION: expand leads.status enum (run if table already exists) ────────
+-- alter table leads drop constraint if exists leads_status_check;
+-- alter table leads add constraint leads_status_check
+--   check (status in ('new', 'contacted', 'replied', 'meeting_booked', 'client', 'converted'));

@@ -356,15 +356,15 @@ cron.schedule('0 8 * * 1', async () => {
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const { data: leads } = await supabaseAdmin
       .from('leads')
-      .select('status, score, created_at')
+      .select('status, ai_score, created_at')
       .gte('created_at', since)
 
     const all = leads || []
     const stats = {
       scraped: all.length,
-      contacted: all.filter(l => ['Contacted', 'Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      replied: all.filter(l => ['Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      meetings: all.filter(l => l.status === 'Meeting Booked').length,
+      contacted: all.filter(l => ['contacted', 'replied', 'meeting_booked', 'client'].includes(l.status)).length,
+      replied: all.filter(l => ['replied', 'meeting_booked', 'client'].includes(l.status)).length,
+      meetings: all.filter(l => l.status === 'meeting_booked').length,
     }
 
     const label = `Week of ${new Date(since).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`
