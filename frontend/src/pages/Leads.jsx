@@ -382,6 +382,7 @@ export default function Leads() {
   // Marketing Agent integration
   const [agentStatus, setAgentStatus] = useState({ status: 'offline' })
   const [sendingToAgent, setSendingToAgent] = useState(false)
+  const agentReachable = agentStatus.status !== 'offline'
 
   useEffect(() => { fetchLeads() }, [])
 
@@ -783,7 +784,9 @@ export default function Leads() {
               boxShadow: agentStatus.status === 'offline' ? '0 0 0 2px rgba(34,197,94,0.2)' : '0 0 0 2px rgba(74,222,128,0.2)'
             }}></div>
             <span style={{ color: '#4ade80' }}>
-              {agentStatus.status === 'offline' ? 'System Ready' : `AI Ready (${(agentStatus.tickCount || 0)} ticks)`}
+              {agentStatus.status === 'offline'
+                ? 'System Ready (Agent not connected)'
+                : `AI Ready (${(agentStatus.tickCount || 0)} ticks)`}
             </span>
           </div>
           
@@ -806,14 +809,15 @@ export default function Leads() {
           {selected.size > 0 && (
             <button
               onClick={() => handleSendToAgent([...selected])}
-              disabled={sendingToAgent}
+              disabled={sendingToAgent || !agentReachable}
               id="send-to-agent"
+              title={!agentReachable ? 'Marketing Agent is unreachable. Check MARKETING_AGENT_URL and agent service.' : ''}
               style={{
                 padding: '8px 14px', fontSize: 13, fontWeight: 500,
                 background: 'linear-gradient(135deg, #a78bfa, #8b5cf6)',
                 border: 'none', borderRadius: 6, color: '#fff',
-                cursor: sendingToAgent ? 'not-allowed' : 'pointer',
-                opacity: sendingToAgent ? 0.7 : 1,
+                cursor: (sendingToAgent || !agentReachable) ? 'not-allowed' : 'pointer',
+                opacity: (sendingToAgent || !agentReachable) ? 0.55 : 1,
                 display: 'flex', alignItems: 'center', gap: 6
               }}
             >
