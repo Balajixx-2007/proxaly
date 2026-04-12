@@ -529,7 +529,7 @@ export default function Leads() {
       const emailableIds = emailable.map(l => l.id)
       console.log(`Sending ${emailableIds.length} lead(s) to Marketing Agent...`)
       const res = await leadsApi.sendToAgent(emailableIds)
-      const { sent, failed, total } = res.data || {}
+      const { sent, failed, total, errors } = res.data || {}
 
       if (sent && sent > 0) {
         toast.success(`✅ ${sent} lead${sent !== 1 ? 's' : ''} sent to Marketing Agent!`, { duration: 4000 })
@@ -555,7 +555,16 @@ export default function Leads() {
       }
 
       if (failed && failed > 0) {
-        toast.error(`⚠️ Failed to send ${failed} lead(s). Ensure they have emails.`, { duration: 4000 })
+        const firstError = Array.isArray(errors) && errors.length > 0 ? String(errors[0]) : ''
+        const likelyAgentIssue = /econnrefused|enotfound|timeout|network|unreachable|503|500/i.test(firstError)
+
+        if (likelyAgentIssue) {
+          toast.error(`⚠️ Failed to send ${failed} lead(s). Marketing Agent service is unreachable.`, { duration: 5000 })
+        } else if (firstError) {
+          toast.error(`⚠️ Failed to send ${failed} lead(s). ${firstError}`, { duration: 5000 })
+        } else {
+          toast.error(`⚠️ Failed to send ${failed} lead(s).`, { duration: 4000 })
+        }
       }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to send leads. Is Marketing Agent running?', { duration: 5000 })
