@@ -1,30 +1,91 @@
-﻿# Proxaly - Start All Servers
+﻿# Proxaly - Cloud Launcher (Vercel + Railway)
 # Usage: & "E:\ai leads\start.ps1"
 
-Write-Host "Starting Proxaly servers..." -ForegroundColor Cyan
+Write-Host "Opening Proxaly cloud deployment..." -ForegroundColor Cyan
 
-# Kill any existing process on port 3001
-$port3001 = Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -ErrorAction SilentlyContinue
-if ($port3001) {
-    Stop-Process -Id $port3001 -Force -ErrorAction SilentlyContinue
-    Write-Host "Stopped existing backend process." -ForegroundColor Gray
+$repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$envLocalPath = Join-Path $repoRoot ".env.local"
+$vercelProjectPath = Join-Path $repoRoot ".vercel\project.json"
+
+# Set these once in your user environment for best experience:
+# [System.Environment]::SetEnvironmentVariable("PROXALY_FRONTEND_URL", "https://<your-vercel-domain>", "User")
+# [System.Environment]::SetEnvironmentVariable("PROXALY_BACKEND_URL", "https://<your-railway-domain>", "User")
+
+$frontendUrl = $env:PROXALY_FRONTEND_URL
+$backendUrl = $env:PROXALY_BACKEND_URL
+
+if ((-not $frontendUrl) -and (Test-Path $vercelProjectPath)) {
+    try {
+        $projectJson = Get-Content $vercelProjectPath -Raw | ConvertFrom-Json
+        if ($projectJson.projectName) {
+            $frontendUrl = "https://$($projectJson.projectName).vercel.app"
+        }
+    } catch {
+        # ignore parse errors
+    }
 }
 
-Start-Sleep -Seconds 1
+if ((-not $backendUrl) -and (Test-Path $envLocalPath)) {
+    $apiLine = Get-Content $envLocalPath | Where-Object { $_ -match '^VITE_API_URL=' } | Select-Object -First 1
+    if ($apiLine) {
+        $apiUrl = ($apiLine -replace '^VITE_API_URL=', '').Trim('"')
+        if ($apiUrl -match '/api/?$') {
+            $backendUrl = ($apiUrl -replace '/api/?$', '')
+        } else {
+            $backendUrl = $apiUrl
+        }
+    }
+}
 
-# Start backend
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd 'E:\ai leads\backend'; node index.js"
+if ($backendUrl) {
+    # Normalize legacy/stale backend host variants to current Railway production host.
+    $backendUrl = $backendUrl -replace 'https://proxaly\.production\.up\.railway\.app', 'https://proxaly-production.up.railway.app'
+    $backendUrl = $backendUrl -replace 'https://proxaly-backend\.railway\.app', 'https://proxaly-production.up.railway.app'
+}
 
-Start-Sleep -Seconds 2
+Write-Host "" 
+if ($frontendUrl) {
+    Write-Host "Frontend: $frontendUrl" -ForegroundColor Green
+} else {
+    Write-Host "Frontend URL not set. Set PROXALY_FRONTEND_URL in user environment." -ForegroundColor Yellow
+}
 
-# Start frontend
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd 'E:\ai leads\frontend'; npm run dev"
-
+if ($backendUrl) {
+    Write-Host "Backend:  $backendUrl" -ForegroundColor Green
+} else {
+    Write-Host "Backend URL not set. Set PROXALY_BACKEND_URL in user environment." -ForegroundColor Yellow
+}
 Write-Host ""
-Write-Host "Both servers are starting in new windows!" -ForegroundColor Green
-Write-Host "Frontend: http://localhost:5173" -ForegroundColor Cyan
-Write-Host "Backend:  http://localhost:3001" -ForegroundColor Yellow
-Write-Host ""
 
-Start-Sleep -Seconds 4
-Start-Process "http://localhost:5173"
+if ($backendUrl) {
+    $healthCandidates = @(
+        "$backendUrl/api/health",
+        "$backendUrl/health"
+    )
+
+    $healthOk = $false
+    foreach ($healthUrl in $healthCandidates) {
+        try {
+            $resp = Invoke-WebRequest -Uri $healthUrl -Method GET -TimeoutSec 10
+            if ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 500) {
+                Write-Host "Backend health check reachable: $healthUrl (HTTP $($resp.StatusCode))" -ForegroundColor Cyan
+                $healthOk = $true
+                break
+            }
+        } catch {
+            # Try next health endpoint
+        }
+    }
+
+    if (-not $healthOk) {
+        Write-Host "Backend health endpoint not reachable right now." -ForegroundColor Yellow
+    }
+}
+
+if ($frontendUrl) {
+    Start-Process $frontendUrl
+    Write-Host "Opened Proxaly cloud URL." -ForegroundColor Green
+} else {
+    Start-Process "https://vercel.com/dashboard"
+    Write-Host "Opened Vercel dashboard. Set PROXALY_FRONTEND_URL for one-click app opening." -ForegroundColor Yellow
+}

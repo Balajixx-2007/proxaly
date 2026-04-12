@@ -109,8 +109,8 @@ function collectDeploymentInfo() {
   log('  [A] Marketing Agent is hosted externally (recommended for prod)', 'cyan');
   log('      Example: https://agent.yourdomain.com\n');
 
-  log('  [B] Marketing Agent is on localhost (dev only, will NOT work in prod)', 'yellow');
-  log('      Example: http://localhost:3000\n');
+  log('  [B] Marketing Agent is hosted on a separate dev/staging URL', 'yellow');
+  log('      Example: https://your-agent-service.example.com\n');
 
   log('  [C] Not ready to deploy yet (exit and prepare)', 'cyan');
   log('\n');

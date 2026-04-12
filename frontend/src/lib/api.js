@@ -47,7 +47,7 @@ export const leadsApi = {
   export: (params) => api.get('/leads/export', { params, responseType: 'blob' }),
   // Marketing Agent integration
   sendToAgent: (leadIds) => api.post('/leads/send-to-agent', { leadIds }),
-  getAgentStatus: () => api.get('/leads/agent/status'),
+  getAgentStatus: () => api.get('/agent/status'),
 }
 
 // ----- Campaigns -----

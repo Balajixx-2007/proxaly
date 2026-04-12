@@ -56,7 +56,7 @@ const LOG_DIR = path.join(__dirname, '..', 'logs')
 const DATA_DIR = path.join(__dirname, '..', 'data')
 const LOG_FILE = path.join(LOG_DIR, 'automation.log')
 const STATE_FILE = path.join(DATA_DIR, 'automation-state.json')
-const MARKETING_AGENT_URL = process.env.MARKETING_AGENT_URL || 'http://localhost:3000'
+const MARKETING_AGENT_URL = (process.env.MARKETING_AGENT_URL || '').trim().replace(/\/$/, '')
 
 // Ensure directories exist
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
@@ -129,6 +129,11 @@ async function isDuplicate(lead) {
 // ── Send to Marketing Agent ───────────────────────────────────────────────────
 async function sendToMarketingAgent(lead) {
   try {
+    if (!MARKETING_AGENT_URL) {
+      log('MARKETING_AGENT_URL not configured; skipping external Marketing Agent send', 'WARN')
+      return false
+    }
+
     if (!lead.email) {
       log(`Skipping ${lead.name} — no email`, 'WARN')
       return false

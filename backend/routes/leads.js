@@ -11,8 +11,8 @@ const { enrichLead, enrichLeadsBatch } = require('../services/groq')
 const { findEmail } = require('../services/emailFinder')
 const { getClient } = require('../services/supabase')
 const { v4: uuidv4 } = require('uuid')
-const axios = require('axios')
 const { normalizeLeadStatus } = require('../utils/leadSchema')
+const { getInProcessAgent, callExternalAgent } = require('../services/agentMode')
 
 const ALLOWED_BUSINESS_TYPES = new Set([
   'marketing agency',
@@ -380,8 +380,6 @@ router.post('/send-to-agent', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Maximum 100 leads per send' })
   }
 
-  const marketingAgentUrl = process.env.MARKETING_AGENT_URL || 'http://localhost:3000'
-
   try {
     const db = getClient(req)
     const { data: leads, error } = await db
@@ -394,64 +392,97 @@ router.post('/send-to-agent', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'No leads found' })
     }
 
-    console.log(`[Marketing Agent] Sending ${leads.length} leads to ${marketingAgentUrl}`)
-
     let sent = 0
     let failed = 0
     const errors = []
 
-    // Send each lead individually to Marketing Agent
-    for (const lead of leads) {
-      try {
-        const payload = {
-          name: lead.name || 'Unknown',
-          email: lead.email || '',
-          company: lead.city || lead.address || '',
-          phone: lead.phone || '',
-          website: lead.website || '',
-          observation: lead.ai_summary || lead.outreach_message || lead.notes || ''
-        }
+    const agentService = getInProcessAgent()
+    if (agentService) {
+      console.log(`[Marketing Agent] Queueing ${leads.length} leads to in-process agent`)
 
-        // Skip if no email
-        if (!payload.email) {
-          console.log(`[Marketing Agent] Skipping ${lead.name} - no email`)
-          failed++
-          continue
-        }
+      for (const lead of leads) {
+        try {
+          const email = lead.email || ''
+          if (!email) {
+            console.log(`[Marketing Agent] Skipping ${lead.name} - no email`)
+            failed++
+            continue
+          }
 
-        const response = await axios.post(`${marketingAgentUrl}/api/leads`, payload, {
-          timeout: 5000,
-          headers: { 'Content-Type': 'application/json' },
-          validateStatus: () => true,
-        })
+          await agentService.queue.addToQueue({
+            leadId: lead.id,
+            userId: req.user.id,
+            email,
+            leadName: lead.name || 'Unknown',
+            company: lead.city || lead.address || '',
+            enrichmentData: {
+              phone: lead.phone || '',
+              website: lead.website || '',
+              observation: lead.ai_summary || lead.outreach_message || lead.notes || '',
+            },
+          })
 
-        if (response.status >= 200 && response.status < 300) {
           sent++
-          console.log(`[Marketing Agent] ✅ Sent: ${lead.name} (${lead.email})`)
-        } else {
+          console.log(`[Marketing Agent] ✅ Queued: ${lead.name} (${email})`)
+        } catch (err) {
           failed++
-          errors.push(`${lead.name}: ${typeof response.data === 'string' ? response.data : JSON.stringify(response.data)}`)
-          console.log(`[Marketing Agent] ❌ Failed: ${lead.name} - ${response.status}`)
+          errors.push(`${lead.name}: ${err.message}`)
+          console.error(`[Marketing Agent] Queue error for ${lead.name}:`, err.message)
         }
-      } catch (err) {
-        failed++
-        errors.push(`${lead.name}: ${err.message}`)
-        console.error(`[Marketing Agent] Send error for ${lead.name}:`, err.message)
       }
-    }
 
-    // Start marketing agent after sending leads
-    if (sent > 0) {
-      try {
-        console.log(`[Marketing Agent] Starting agent loop...`)
-        await axios.post(`${marketingAgentUrl}/api/agent/start`, {}, {
-          timeout: 5000,
-          headers: { 'Content-Type': 'application/json' },
-        })
-        console.log(`[Marketing Agent] ✅ Agent started`)
-      } catch (err) {
-        console.warn(`[Marketing Agent] Could not start agent:`, err.message)
-        // Don't fail the whole operation if agent start fails
+      if (sent > 0) {
+        try {
+          await agentService.start()
+        } catch (err) {
+          console.warn('[Marketing Agent] Could not start in-process agent:', err.message)
+        }
+      }
+    } else {
+      console.log(`[Marketing Agent] Sending ${leads.length} leads to external agent`)
+
+      for (const lead of leads) {
+        try {
+          const payload = {
+            name: lead.name || 'Unknown',
+            email: lead.email || '',
+            company: lead.city || lead.address || '',
+            phone: lead.phone || '',
+            website: lead.website || '',
+            observation: lead.ai_summary || lead.outreach_message || lead.notes || ''
+          }
+
+          if (!payload.email) {
+            console.log(`[Marketing Agent] Skipping ${lead.name} - no email`)
+            failed++
+            continue
+          }
+
+          const response = await callExternalAgent('post', '/api/leads', payload, 5000)
+
+          if (response.status >= 200 && response.status < 300) {
+            sent++
+            console.log(`[Marketing Agent] ✅ Sent: ${lead.name} (${lead.email})`)
+          } else {
+            failed++
+            errors.push(`${lead.name}: ${typeof response.data === 'string' ? response.data : JSON.stringify(response.data)}`)
+            console.log(`[Marketing Agent] ❌ Failed: ${lead.name} - ${response.status}`)
+          }
+        } catch (err) {
+          failed++
+          errors.push(`${lead.name}: ${err.message}`)
+          console.error(`[Marketing Agent] Send error for ${lead.name}:`, err.message)
+        }
+      }
+
+      if (sent > 0) {
+        try {
+          console.log('[Marketing Agent] Starting external agent loop...')
+          await callExternalAgent('post', '/api/agent/start', {}, 5000)
+          console.log('[Marketing Agent] ✅ External agent started')
+        } catch (err) {
+          console.warn('[Marketing Agent] Could not start external agent:', err.message)
+        }
       }
     }
 
@@ -476,15 +507,14 @@ router.post('/send-to-agent', requireAuth, async (req, res) => {
  * Returns: { running, tickCount, lastRunTime, status }
  */
 router.get('/agent/status', requireAuth, async (req, res) => {
-  const marketingAgentUrl = process.env.MARKETING_AGENT_URL || 'http://localhost:3000'
-
   try {
-    console.log(`[Marketing Agent] Fetching status from ${marketingAgentUrl}`)
-    
-    const response = await axios.get(`${marketingAgentUrl}/api/agent/status`, {
-      timeout: 5000,
-      validateStatus: () => true,
-    })
+    const agentService = getInProcessAgent()
+    if (agentService) {
+      const status = await agentService.getStatus()
+      return res.json(status)
+    }
+
+    const response = await callExternalAgent('get', '/api/agent/status', undefined, 5000)
 
     if (response.status < 200 || response.status >= 300) {
       console.warn(`[Marketing Agent] Status check failed: ${response.status}`)

@@ -1,11 +1,5 @@
-// Automation API client
-import axios from 'axios'
-import { API_BASE_URL } from './api'
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 60000,
-})
+// Automation API client (reuses shared authenticated API instance)
+import api from './api'
 
 export const automationApi = {
   status: () => api.get('/automation/status'),

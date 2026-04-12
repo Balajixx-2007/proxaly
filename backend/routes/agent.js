@@ -8,50 +8,17 @@
  */
 
 const express = require('express');
-const axios = require('axios');
 const { requireAuth } = require('../middleware/auth');
+const { getInProcessAgent, callExternalAgent } = require('../services/agentMode');
 
 const router = express.Router();
-
-// Try to use Phase 2 in-process agent if available, fallback to Phase 1 external
-let agentService = null;
-try {
-  const phase2Agent = require('../agent');
-  if (process.env.USE_EXTERNAL_AGENT !== 'true') {
-    agentService = phase2Agent;
-  }
-} catch (err) {
-  console.warn('[Routes] Phase 2 agent not available, using external service');
-}
-
-/**
- * Phase 1 Fallback: Call external agent service
- */
-function getMarketingAgentUrl() {
-  return process.env.MARKETING_AGENT_URL || 'http://localhost:3000';
-}
-
-async function callExternalAgent(method, path, data) {
-  const base = getMarketingAgentUrl();
-  const url = `${base}${path}`;
-
-  const response = await axios({
-    method,
-    url,
-    data,
-    timeout: 8000,
-    validateStatus: () => true,
-    headers: { 'Content-Type': 'application/json' },
-  });
-
-  return response;
-}
 
 /**
  * GET /api/agent/status
  * Get current agent status (running/stopped, tick count, pending approvals)
  */
 router.get('/status', requireAuth, async (req, res) => {
+  const agentService = getInProcessAgent();
   try {
     if (agentService) {
       // Phase 2: Call in-process service
@@ -82,6 +49,7 @@ router.get('/status', requireAuth, async (req, res) => {
  * Start the agent tick loop
  */
 router.post('/start', requireAuth, async (req, res) => {
+  const agentService = getInProcessAgent();
   try {
     if (agentService) {
       const result = await agentService.start();
@@ -100,6 +68,7 @@ router.post('/start', requireAuth, async (req, res) => {
  * Stop the agent tick loop
  */
 router.post('/stop', requireAuth, async (req, res) => {
+  const agentService = getInProcessAgent();
   try {
     if (agentService) {
       const result = await agentService.stop();
@@ -118,6 +87,7 @@ router.post('/stop', requireAuth, async (req, res) => {
  * Get pending approvals list
  */
 router.get('/approvals', requireAuth, async (req, res) => {
+  const agentService = getInProcessAgent();
   try {
     if (agentService) {
       const approvals = await agentService.approvals.getPendingApprovals();
@@ -137,6 +107,7 @@ router.get('/approvals', requireAuth, async (req, res) => {
  */
 router.post('/approvals/:leadId/approve', requireAuth, async (req, res) => {
   const { leadId } = req.params;
+  const agentService = getInProcessAgent();
 
   try {
     if (agentService) {
@@ -158,6 +129,7 @@ router.post('/approvals/:leadId/approve', requireAuth, async (req, res) => {
 router.post('/approvals/:leadId/reject', requireAuth, async (req, res) => {
   const { leadId } = req.params;
   const { reason } = req.body;
+  const agentService = getInProcessAgent();
 
   try {
     if (agentService) {
@@ -179,6 +151,7 @@ router.post('/approvals/:leadId/reject', requireAuth, async (req, res) => {
  * Health check endpoint
  */
 router.get('/health', async (req, res) => {
+  const agentService = getInProcessAgent();
   try {
     if (agentService) {
       const health = await agentService.healthCheck();

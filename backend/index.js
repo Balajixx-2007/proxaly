@@ -28,19 +28,29 @@ const { initMonitoring, captureException } = require('./services/monitoring')
 
 const app = express()
 const PORT = process.env.PORT || 3001
+const isProduction = process.env.NODE_ENV === 'production'
+const frontendUrl = String(process.env.FRONTEND_URL || '').trim()
 
 initMonitoring()
 
 // ── Security middleware ─────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }))
 
+const corsOrigins = [
+  'https://proxaly.vercel.app',
+  /\.vercel\.app$/, // Vercel preview URLs
+]
+
+if (frontendUrl) {
+  corsOrigins.unshift(frontendUrl)
+}
+
+if (!isProduction && process.env.DEV_FRONTEND_URL) {
+  corsOrigins.push(String(process.env.DEV_FRONTEND_URL).trim())
+}
+
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:5173',
-    'http://localhost:3000',
-    'https://proxaly.vercel.app',
-    /\.vercel\.app$/,  // Vercel preview URLs
-  ],
+  origin: corsOrigins,
   credentials: true,
 }))
 
@@ -130,8 +140,9 @@ if (process.env.USE_EXTERNAL_AGENT !== 'true') {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`\n🚀 Proxaly API running on http://localhost:${PORT}`)
-  console.log(`📊 Health: http://localhost:${PORT}/health`)
+  const hostLabel = process.env.PUBLIC_BACKEND_URL || `port:${PORT}`
+  console.log(`\n🚀 Proxaly API running on ${hostLabel}`)
+  console.log(`📊 Health: ${hostLabel}/health`)
   console.log(`🔑 Groq:   ${process.env.GROQ_API_KEY ? '✓ configured' : '✗ not set'}`)
   console.log(`🗃️  Supabase: ${process.env.SUPABASE_URL ? '✓ configured' : '✗ not set'}`)
   if (agentService) {

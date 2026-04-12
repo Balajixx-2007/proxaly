@@ -4,6 +4,13 @@ import { Zap, Loader2, Play, Square, ExternalLink } from 'lucide-react';
 import automationApi from '../lib/automationApi';
 import toast from 'react-hot-toast';
 
+function getApiErrorMessage(err, fallback) {
+  const status = err?.response?.status;
+  const apiMsg = err?.response?.data?.error || err?.response?.data?.message;
+  if (status === 401) return 'Session expired. Please sign in again.';
+  return apiMsg || err?.message || fallback;
+}
+
 export default function AutomationCard() {
   const [status, setStatus] = useState({});
   const [loading, setLoading] = useState(true);
@@ -11,31 +18,34 @@ export default function AutomationCard() {
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 30000);
+    const interval = setInterval(() => fetchStatus({ silent: true }), 30000);
     return () => clearInterval(interval);
   }, []);
 
-  async function fetchStatus() {
-    setLoading(true);
+  async function fetchStatus({ silent = false } = {}) {
+    if (!silent) setLoading(true);
     try {
       const res = await automationApi.status();
       setStatus(res.data);
-    } catch {
-      setStatus({ running: false });
+    } catch (err) {
+      // Keep last known state to avoid false "Stopped" UI during transient failures.
+      console.warn('[AutomationCard] status fetch failed:', err?.message || err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
-  async function handleToggle(on) {
+  async function handleToggle() {
     setRunLoading(true);
     try {
-      if (on) await automationApi.start();
+      const shouldStart = !status.running;
+
+      if (shouldStart) await automationApi.start();
       else await automationApi.stop();
-      await fetchStatus();
-      toast.success(on ? 'Automation started' : 'Automation stopped');
-    } catch {
-      toast.error('Failed to update automation');
+      await fetchStatus({ silent: true });
+      toast.success(shouldStart ? 'Automation started' : 'Automation stopped');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to update automation'));
     } finally {
       setRunLoading(false);
     }
@@ -45,10 +55,10 @@ export default function AutomationCard() {
     setRunLoading(true);
     try {
       await automationApi.runNow();
-      await fetchStatus();
+      await fetchStatus({ silent: true });
       toast.success('Automation run complete');
-    } catch {
-      toast.error('Failed to run automation');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to run automation'));
     } finally {
       setRunLoading(false);
     }
@@ -81,13 +91,13 @@ export default function AutomationCard() {
           <strong>Leads Today:</strong> {status.totalLeadsToday || 0}
         </p>
         <p style={{ margin: '6px 0', color: 'rgba(148,163,184,0.8)' }}>
-          <strong>Sent to Agent:</strong> {status.leadsSentToday || 0}
+          <strong>Sent to Agent:</strong> {status.totalSentToday || 0}
         </p>
       </div>
       <div style={{ display: 'flex', gap: 8, flexDirection: 'row', marginBottom: 10 }}>
         <button
           className={`btn ${status.running ? 'btn-danger' : 'btn-primary'}`}
-          onClick={() => handleToggle(!status.running)}
+          onClick={handleToggle}
           disabled={runLoading || loading}
         >
           {runLoading ? <Loader2 size={14} className="spin" /> : status.running ? <Square size={14} /> : <Play size={14} />}

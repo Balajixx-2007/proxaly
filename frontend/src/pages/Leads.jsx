@@ -174,7 +174,7 @@ function LeadRow({ lead, onStatusChange, onFindEmail, onDelete, selected, onSele
 
   const handleSendOne = async () => {
     if (!agentReachable) {
-      toast.error('Marketing Agent is unreachable. Check agent service and backend MARKETING_AGENT_URL.')
+      toast.error('Marketing Agent is unreachable. Check agent mode configuration and service health.')
       return
     }
     setShowMenu(false)
@@ -343,7 +343,7 @@ function LeadRow({ lead, onStatusChange, onFindEmail, onDelete, selected, onSele
               borderRadius: 6, padding: '4px 0', zIndex: 100, minWidth: 140,
               boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
             }}>
-              <button onClick={handleSendOne} disabled={!agentReachable} title={!agentReachable ? 'Marketing Agent is unreachable. Check MARKETING_AGENT_URL and agent service.' : ''} style={{
+              <button onClick={handleSendOne} disabled={!agentReachable} title={!agentReachable ? 'Marketing Agent is unreachable. Check agent mode configuration and service health.' : ''} style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
                 width: '100%', border: 'none', background: 'transparent', color: '#a78bfa',
                 cursor: agentReachable ? 'pointer' : 'not-allowed', fontSize: 12, textAlign: 'left',
@@ -797,7 +797,7 @@ export default function Leads() {
               onClick={() => handleSendToAgent([...selected])}
               disabled={sendingToAgent || !agentReachable}
               id="send-to-agent"
-              title={!agentReachable ? 'Marketing Agent is unreachable. Check MARKETING_AGENT_URL and agent service.' : ''}
+              title={!agentReachable ? 'Marketing Agent is unreachable. Check agent mode configuration and service health.' : ''}
               style={{
                 padding: '8px 14px', fontSize: 13, fontWeight: 500,
                 background: 'linear-gradient(135deg, #a78bfa, #8b5cf6)',
