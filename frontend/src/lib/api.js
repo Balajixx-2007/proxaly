@@ -69,6 +69,16 @@ export const emailApi = {
   logs: (params) => api.get('/email/logs', { params }),
 }
 
+// ----- Marketing Agent -----
+export const agentApi = {
+  status: () => api.get('/agent/status'),
+  start: () => api.post('/agent/start'),
+  stop: () => api.post('/agent/stop'),
+  approvals: () => api.get('/agent/approvals'),
+  approve: (leadId) => api.post(`/agent/approvals/${leadId}/approve`),
+  reject: (leadId) => api.post(`/agent/approvals/${leadId}/reject`),
+}
+
 // ----- Auth -----
 export const authApi = {
   profile: () => api.get('/auth/profile'),

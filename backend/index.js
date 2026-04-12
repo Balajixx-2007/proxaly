@@ -22,6 +22,7 @@ const { router: analyticsRouter } = require('./routes/analytics')
 const channelsRouter = require('./routes/channels')
 const { router: brandingRouter } = require('./routes/branding')
 const emailRouter = require('./routes/email')
+const agentRouter = require('./routes/agent')
 const { initMonitoring, captureException } = require('./services/monitoring')
 
 
@@ -83,6 +84,7 @@ app.use('/api/analytics', analyticsRouter);
 app.use('/api/channels', channelsRouter);
 app.use('/api/branding', brandingRouter);
 app.use('/api/email', emailRouter);
+app.use('/api/agent', agentRouter);
 
 
 // ── 404 handler ──────────────────────────────────────────────────────────────
