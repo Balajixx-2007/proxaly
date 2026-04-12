@@ -3,15 +3,74 @@ import { useState, useEffect, useCallback } from 'react'
 import { leadsApi, campaignsApi } from '../lib/api'
 import toast from 'react-hot-toast'
 import {
-  Search, Zap, Download, Filter, ChevronDown, ChevronUp,
+  Search, Download,
   Globe, Phone, MapPin, Sparkles, Loader2, Trash2,
-  CheckCircle, Clock, RefreshCw, Mail, Send, AlertCircle, MoreVertical
+  RefreshCw, Mail, Send, MoreVertical
 } from 'lucide-react'
 
 const STATUS_OPTIONS = ['new', 'contacted', 'converted']
+const BUSINESS_TYPE_OPTIONS = [
+  'marketing agency',
+  'digital agency',
+  'consultant',
+  'web design company',
+]
+
+function getContactScore(lead) {
+  const hasEmail = Boolean(lead?.email)
+  const hasPhone = Boolean(lead?.phone)
+  const hasWebsite = Boolean(lead?.website)
+
+  if (hasEmail && hasPhone) {
+    return { label: 'High', title: 'Email + phone', color: '#4ade80' }
+  }
+  if (hasEmail || hasPhone) {
+    return { label: 'Medium', title: hasEmail ? 'Email only' : 'Phone only', color: '#fbbf24' }
+  }
+  if (hasWebsite) {
+    return { label: 'Low', title: 'Website only', color: '#fb7185' }
+  }
+  return { label: 'N/A', title: 'No contact', color: 'rgba(148,163,184,0.6)' }
+}
+
+function getContactReadiness(lead) {
+  const hasEmail = Boolean(lead?.email)
+  const hasPhone = Boolean(lead?.phone)
+  const hasWebsite = Boolean(lead?.website)
+
+  if (hasEmail || hasPhone) {
+    return {
+      label: 'Ready to Contact',
+      color: '#22c55e',
+      bg: 'rgba(34,197,94,0.14)',
+      border: 'rgba(34,197,94,0.4)',
+    }
+  }
+
+  if (hasWebsite) {
+    return {
+      label: 'Needs Enrichment',
+      color: '#f59e0b',
+      bg: 'rgba(245,158,11,0.14)',
+      border: 'rgba(245,158,11,0.4)',
+    }
+  }
+
+  return {
+    label: 'No Direct Contact',
+    color: '#ef4444',
+    bg: 'rgba(239,68,68,0.14)',
+    border: 'rgba(239,68,68,0.4)',
+  }
+}
+
+function isContactable(lead) {
+  if (typeof lead?.contactable === 'boolean') return lead.contactable
+  return Boolean(lead?.email || lead?.phone || lead?.website)
+}
 
 function SearchForm({ onResults, loading, setLoading }) {
-  const [businessType, setBusinessType] = useState('')
+  const [businessType, setBusinessType] = useState('marketing agency')
   const [city, setCity] = useState('')
   const [source, setSource] = useState('auto')
 
@@ -26,7 +85,7 @@ function SearchForm({ onResults, loading, setLoading }) {
       const leads = res.data?.leads || []
       const msg = res.data?.message || ''
       // Pass search context so table can filter to this search only
-      onResults(leads, { businessType: businessType.trim(), city: city.trim() })
+      onResults(leads, { businessType: businessType.trim(), city: city.trim(), source })
       if (leads.length > 0) {
         toast.success(`Found ${leads.length} leads for "${businessType}" in ${city}!`, { icon: '🎯' })
       } else {
@@ -45,14 +104,18 @@ function SearchForm({ onResults, loading, setLoading }) {
         <label style={{ display: 'block', fontSize: 12, color: 'rgba(148,163,184,0.6)', marginBottom: 6 }}>
           Business Type
         </label>
-        <input
+        <select
           id="business-type"
           className="input"
-          placeholder="e.g. dental clinics"
           value={businessType}
           onChange={e => setBusinessType(e.target.value)}
           required
-        />
+          style={{ appearance: 'none' }}
+        >
+          {BUSINESS_TYPE_OPTIONS.map(type => (
+            <option key={type} value={type}>{type}</option>
+          ))}
+        </select>
       </div>
       <div style={{ flex: '1 1 200px' }}>
         <label style={{ display: 'block', fontSize: 12, color: 'rgba(148,163,184,0.6)', marginBottom: 6 }}>
@@ -92,20 +155,18 @@ function SearchForm({ onResults, loading, setLoading }) {
         style={{ padding: '10px 20px', flexShrink: 0 }}
       >
         {loading ? <Loader2 size={16} className="spinner" /> : <Search size={16} />}
-        {loading ? 'Scraping…' : 'Find Leads'}
+        {loading ? 'Finding new leads...' : 'Find Leads'}
       </button>
     </form>
   )
 }
 
-function LeadRow({ lead, onStatusChange, onEnrich, onFindEmail, onDelete, selected, onSelect, onSendToAgent }) {
+function LeadRow({ lead, onStatusChange, onEnrich, onFindEmail, onDelete, selected, onSelect, onSendToAgent, isNew }) {
   const [enriching, setEnriching] = useState(false)
   const [findingEmail, setFindingEmail] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
-  const scoreColor = !lead.ai_score ? 'rgba(148,163,184,0.4)'
-    : lead.ai_score >= 7 ? '#4ade80'
-    : lead.ai_score >= 4 ? '#fbbf24'
-    : '#f87171'
+  const contactScore = getContactScore(lead)
+  const contactReadiness = getContactReadiness(lead)
 
   const handleEnrich = async () => {
     setEnriching(true)
@@ -129,7 +190,21 @@ function LeadRow({ lead, onStatusChange, onEnrich, onFindEmail, onDelete, select
           style={{ accentColor: '#8b5cf6', width: 14, height: 14 }} />
       </td>
       <td>
-        <div style={{ fontWeight: 500, color: '#e2e8f0', fontSize: 14 }}>{lead.name}</div>
+        <div style={{ fontWeight: 500, color: '#e2e8f0', fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>{lead.name}</span>
+          {isNew && (
+            <span style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: 0.3,
+              color: '#22c55e',
+              border: '1px solid rgba(34,197,94,0.45)',
+              background: 'rgba(34,197,94,0.12)',
+              borderRadius: 999,
+              padding: '1px 6px'
+            }}>NEW</span>
+          )}
+        </div>
         {lead.business_type && (
           <div style={{ fontSize: 12, color: 'rgba(148,163,184,0.5)', marginTop: 2 }}>{lead.business_type}</div>
         )}
@@ -141,54 +216,101 @@ function LeadRow({ lead, onStatusChange, onEnrich, onFindEmail, onDelete, select
       </td>
       <td>
         {lead.email
-          ? <a href={`mailto:${lead.email}`}
-              style={{ color: '#4ade80', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, textDecoration: 'none' }}
-              title={lead.email}>
-              <Mail size={12} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
-                {lead.email}
-              </span>
-            </a>
+          ? <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <a href={`mailto:${lead.email}`}
+                style={{ color: '#4ade80', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, textDecoration: 'none' }}
+                title={lead.email}>
+                <Mail size={12} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
+                  {lead.email}
+                </span>
+              </a>
+              <button
+                onClick={() => navigator.clipboard?.writeText(lead.email)}
+                className="btn btn-ghost"
+                style={{ padding: '2px 7px', fontSize: 10, width: 'fit-content' }}
+              >
+                Copy Email
+              </button>
+            </div>
           : <button
               onClick={handleFindEmail}
               className="btn btn-ghost"
               disabled={findingEmail}
               style={{ padding: '3px 8px', fontSize: 11 }}
-              title="Find email for this business">
+              title="Retry enrichment for this business">
               {findingEmail ? <Loader2 size={11} className="spinner" /> : <Mail size={11} />}
-              {findingEmail ? '…' : 'Find'}
+              {findingEmail ? '…' : 'Click to retry enrichment'}
             </button>}
       </td>
       <td>
         {lead.phone
-          ? <a href={`tel:${lead.phone}`} style={{ color: '#22d3ee', display: 'flex', alignItems: 'center', gap: 5, textDecoration: 'none', fontSize: 12 }}>
-              <Phone size={12} />{lead.phone}
-            </a>
+          ? <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <a href={`tel:${lead.phone}`} style={{ color: '#22d3ee', display: 'flex', alignItems: 'center', gap: 5, textDecoration: 'none', fontSize: 12 }}>
+                <Phone size={12} />{lead.phone}
+              </a>
+              <button
+                onClick={() => navigator.clipboard?.writeText(lead.phone)}
+                className="btn btn-ghost"
+                style={{ padding: '2px 7px', fontSize: 10, width: 'fit-content' }}
+              >
+                Copy Phone
+              </button>
+            </div>
           : <span style={{ color: 'rgba(148,163,184,0.3)', fontSize: 12 }}>—</span>}
       </td>
       <td>
         {lead.website
-          ? <a href={lead.website} target="_blank" rel="noreferrer"
-              style={{ color: '#a78bfa', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, textDecoration: 'none' }}>
-              <Globe size={12} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
-                {lead.website.replace(/^https?:\/\//, '')}
-              </span>
-            </a>
+          ? <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <a href={lead.website} target="_blank" rel="noreferrer"
+                style={{ color: '#a78bfa', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, textDecoration: 'none' }}>
+                <Globe size={12} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
+                  {lead.website.replace(/^https?:\/\//, '')}
+                </span>
+              </a>
+              {!lead.email && (
+                <a
+                  href={lead.website}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-ghost"
+                  style={{ padding: '2px 7px', fontSize: 10, width: 'fit-content' }}
+                >
+                  Visit Website
+                </a>
+              )}
+            </div>
           : <span style={{ color: 'rgba(148,163,184,0.3)', fontSize: 13 }}>—</span>}
       </td>
       <td>
-        {lead.ai_score !== null && lead.ai_score !== undefined
-          ? <span style={{ fontWeight: 700, fontSize: 15, color: scoreColor }}>{lead.ai_score}/10</span>
-          : <button
-              onClick={handleEnrich}
-              className="btn btn-ghost"
-              disabled={enriching}
-              style={{ padding: '4px 10px', fontSize: 12 }}
-            >
-              {enriching ? <Loader2 size={12} className="spinner" /> : <Sparkles size={12} />}
-              {enriching ? '…' : 'Enrich'}
-            </button>}
+        <span title={contactScore.title} style={{
+          fontWeight: 700,
+          fontSize: 11,
+          color: contactScore.color,
+          letterSpacing: 0.3,
+          border: `1px solid ${contactScore.color}44`,
+          background: `${contactScore.color}1a`,
+          borderRadius: 999,
+          padding: '3px 8px',
+          display: 'inline-block'
+        }}>
+          {contactScore.label}
+        </span>
+        <div style={{ marginTop: 6 }}>
+          <span style={{
+            fontWeight: 700,
+            fontSize: 10,
+            color: contactReadiness.color,
+            border: `1px solid ${contactReadiness.border}`,
+            background: contactReadiness.bg,
+            borderRadius: 999,
+            padding: '2px 8px',
+            display: 'inline-block'
+          }}>
+            {contactReadiness.label}
+          </span>
+        </div>
       </td>
       <td style={{ maxWidth: 220 }}>
         {lead.outreach_message
@@ -255,6 +377,8 @@ export default function Leads() {
   const [textFilter, setTextFilter] = useState('')      // search box filter
   const [lastSearch, setLastSearch] = useState(null)   // { businessType, city }
   const [bulkEnriching, setBulkEnriching] = useState(false)
+  const [onlyContactable, setOnlyContactable] = useState(true)
+  const [newLeadIds, setNewLeadIds] = useState(new Set())
   // Marketing Agent integration
   const [agentStatus, setAgentStatus] = useState({ status: 'offline' })
   const [sendingToAgent, setSendingToAgent] = useState(false)
@@ -288,6 +412,7 @@ export default function Leads() {
       setLeads(data)
       setLastSearch(null)   // reset to show all on refresh
       setTextFilter('')
+      setNewLeadIds(new Set())
     } catch (err) {
       console.warn('Could not fetch leads:', err.message)
     } finally {
@@ -297,17 +422,41 @@ export default function Leads() {
 
   // After scraping: show ONLY the new results for that search
   const handleResults = (newLeads, searchContext) => {
-    if (newLeads.length === 0) return
+    const usable = newLeads.filter(isContactable)
+    if (usable.length === 0) return
     // Merge into allLeads (deduplicated)
     setAllLeads(prev => {
       const ids = new Set(prev.map(l => l.id))
-      return [...prev, ...newLeads.filter(l => !ids.has(l.id))]
+      return [...prev, ...usable.filter(l => !ids.has(l.id))]
     })
     // Show only this search’s results in the table
-    setLeads(newLeads)
+    setLeads(usable)
     setLastSearch(searchContext)
     setTextFilter('')
     setSelected(new Set())
+    setNewLeadIds(new Set(usable.map(l => l.id)))
+    toast.success(`+${usable.length} new leads found`, { icon: '✨' })
+  }
+
+  const handleFindNewLeads = async () => {
+    if (!lastSearch?.businessType || !lastSearch?.city) {
+      return fetchLeads()
+    }
+
+    setLoading(true)
+    try {
+      const res = await leadsApi.scrape({
+        businessType: lastSearch.businessType,
+        city: lastSearch.city,
+        source: lastSearch.source || 'auto',
+        maxResults: 20,
+      })
+      handleResults(res.data?.leads || [], lastSearch)
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to find new leads')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleStatusChange = async (id, status) => {
@@ -341,7 +490,7 @@ export default function Leads() {
         setLeads(prev => prev.map(l => l.id === id ? { ...l, email } : l))
         toast.success(`Email found: ${email} 📧`)
       } else {
-        toast.error(message || 'Could not find email for this business')
+        toast.error(message || 'No direct email found. Alternative contact methods available.')
       }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Email lookup failed')
@@ -422,6 +571,47 @@ export default function Leads() {
     }
   }
 
+  const handleEnrichAll = async () => {
+    const ids = filteredLeads.map(l => l.id)
+    if (ids.length === 0) return
+
+    setBulkEnriching(true)
+    try {
+      const chunkSize = 20
+      const updates = []
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize)
+        const res = await leadsApi.bulkEnrich(chunk)
+        updates.push(...(res.data?.leads || []))
+      }
+
+      setLeads(prev => prev.map(l => {
+        const u = updates.find(x => x.id === l.id)
+        return u ? { ...l, ...u } : l
+      }))
+      toast.success(`Enriched ${updates.length} leads!`)
+    } catch {
+      toast.error('Enrich all failed')
+    } finally {
+      setBulkEnriching(false)
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    const ids = [...selected]
+    if (ids.length === 0) return toast.error('Select leads first')
+
+    try {
+      await leadsApi.bulkDelete(ids)
+      setLeads(prev => prev.filter(l => !selected.has(l.id)))
+      setAllLeads(prev => prev.filter(l => !selected.has(l.id)))
+      setSelected(new Set())
+      toast.success(`Deleted ${ids.length} leads`)
+    } catch {
+      toast.error('Failed to delete selected leads')
+    }
+  }
+
   const handleExport = async () => {
     try {
       const res = await leadsApi.export({ status: filterStatus !== 'all' ? filterStatus : undefined })
@@ -464,6 +654,7 @@ export default function Leads() {
 
   // Apply status + text filters to current lead view
   const filteredLeads = leads
+    .filter(l => !onlyContactable || isContactable(l))
     .filter(l => filterStatus === 'all' || (l.status || 'new') === filterStatus)
     .filter(l => {
       if (!textFilter) return true
@@ -480,10 +671,13 @@ export default function Leads() {
     <div className="fade-in">
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 26, fontWeight: 700, margin: 0 }}>
-          Lead Finder
+          Contact-Ready Prospects
         </h1>
+        <p style={{ color: '#4ade80', marginTop: 6, marginBottom: 0, fontSize: 13, fontWeight: 600 }}>
+          All results shown here are contact-ready or include a direct contact path.
+        </p>
         <p style={{ color: 'rgba(148,163,184,0.6)', marginTop: 4, fontSize: 14 }}>
-          Scrape businesses with AI enrichment. Find, score, and contact leads.
+          Find actionable prospects with verified contact paths, enrichment, and outreach-ready context.
         </p>
       </div>
 
@@ -528,6 +722,10 @@ export default function Leads() {
               style={{ paddingLeft: 30, fontSize: 12, padding: '6px 10px 6px 28px', width: 200 }}
             />
           </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(148,163,184,0.75)' }}>
+            <input type="checkbox" checked={onlyContactable} onChange={(e) => setOnlyContactable(e.target.checked)} />
+            Only Contactable Leads
+          </label>
           {/* Status filters */}
           {['all', ...STATUS_OPTIONS].map(s => (
             <button
@@ -559,14 +757,30 @@ export default function Leads() {
           }}>
             <div style={{
               width: 8, height: 8, borderRadius: '50%',
-              background: agentStatus.status === 'offline' ? '#f87171' : '#4ade80',
-              boxShadow: agentStatus.status === 'offline' ? '0 0 0 2px rgba(248,113,113,0.2)' : '0 0 0 2px rgba(74,222,128,0.2)'
+              background: agentStatus.status === 'offline' ? '#22c55e' : '#4ade80',
+              boxShadow: agentStatus.status === 'offline' ? '0 0 0 2px rgba(34,197,94,0.2)' : '0 0 0 2px rgba(74,222,128,0.2)'
             }}></div>
-            <span style={{ color: agentStatus.status === 'offline' ? '#f87171' : '#4ade80' }}>
-              {agentStatus.status === 'offline' ? 'Agent Offline' : `Agent Running (${(agentStatus.tickCount || 0)} ticks)`}
+            <span style={{ color: '#4ade80' }}>
+              {agentStatus.status === 'offline' ? 'System Ready' : `AI Ready (${(agentStatus.tickCount || 0)} ticks)`}
             </span>
           </div>
           
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(148,163,184,0.75)' }}>
+            <input
+              type="checkbox"
+              checked={selected.size === filteredLeads.length && filteredLeads.length > 0}
+              onChange={toggleAll}
+              style={{ accentColor: '#8b5cf6' }}
+            />
+            Select All
+          </label>
+
+          {selected.size > 0 && (
+            <button onClick={handleDeleteSelected} className="btn btn-ghost" style={{ color: '#f87171' }}>
+              <Trash2 size={14} /> Delete Selected
+            </button>
+          )}
+
           {selected.size > 0 && (
             <button
               onClick={() => handleSendToAgent([...selected])}
@@ -596,8 +810,19 @@ export default function Leads() {
               Enrich {selected.size} leads
             </button>
           )}
-          <button onClick={fetchLeads} className="btn btn-ghost" style={{ padding: '6px 12px' }}>
+
+          <button
+            onClick={handleEnrichAll}
+            className="btn btn-ghost"
+            disabled={bulkEnriching || filteredLeads.length === 0}
+          >
+            {bulkEnriching ? <Loader2 size={14} className="spinner" /> : <Sparkles size={14} />}
+            Enrich All
+          </button>
+
+          <button onClick={handleFindNewLeads} className="btn btn-ghost" style={{ padding: '6px 12px' }} disabled={loading}>
             <RefreshCw size={14} />
+            {loading ? 'Finding new leads...' : 'Find New Leads'}
           </button>
           <button onClick={handleExport} className="btn btn-ghost" id="export-csv">
             <Download size={14} /> Export CSV
@@ -634,7 +859,7 @@ export default function Leads() {
                   <th>Email</th>
                   <th>Phone</th>
                   <th>Website</th>
-                  <th>AI Score</th>
+                  <th>Contact Score</th>
                   <th>Outreach</th>
                   <th>Status</th>
                   <th></th>
@@ -645,6 +870,7 @@ export default function Leads() {
                   <LeadRow
                     key={lead.id}
                     lead={lead}
+                    isNew={newLeadIds.has(lead.id)}
                     selected={selected.has(lead.id)}
                     onSelect={toggleSelect}
                     onStatusChange={handleStatusChange}

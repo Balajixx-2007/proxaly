@@ -126,7 +126,7 @@ export default function Dashboard() {
           {greeting()}, <span className="gradient-text">{user?.email?.split('@')[0]}</span> 👋
         </h1>
         <p style={{ color: 'rgba(148,163,184,0.6)', marginTop: 6 }}>
-          Here's what's happening with your lead generation today.
+          Here's what's happening with your contact-ready prospect pipeline today.
         </p>
       </div>
 

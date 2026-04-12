@@ -187,12 +187,10 @@ export default function Clients() {
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
 
-  const userId = user?.id
-
   const load = async () => {
     setLoading(true)
     try {
-      const res = await api.get('/clients', { headers: { 'x-user-id': userId } })
+      const res = await api.get('/clients')
       setClients(res.data || [])
     } catch {
       toast.error('Failed to load clients')
@@ -200,10 +198,10 @@ export default function Clients() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [userId])
+  useEffect(() => { load() }, [user?.id])
 
   const handleAdd = async (form) => {
-    const res = await api.post('/clients', form, { headers: { 'x-user-id': userId } })
+    const res = await api.post('/clients', form)
     setClients(c => [res.data, ...c])
     toast.success(`Client "${form.name}" created! Portal link copied to clipboard.`)
     const frontendUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://proxaly.vercel.app'
@@ -212,7 +210,7 @@ export default function Clients() {
 
   const handleDelete = async (id, name) => {
     if (!confirm(`Delete client "${name}"? This cannot be undone.`)) return
-    await api.delete(`/clients/${id}`, { headers: { 'x-user-id': userId } })
+    await api.delete(`/clients/${id}`)
     setClients(c => c.filter(x => x.id !== id))
     toast('Client deleted', { icon: '🗑️' })
   }
@@ -224,7 +222,7 @@ export default function Clients() {
 
   const handleRegenToken = async (id) => {
     if (!confirm('Regenerate portal link? The old link will stop working.')) return
-    const res = await api.post(`/clients/${id}/regenerate-token`, {}, { headers: { 'x-user-id': userId } })
+    const res = await api.post(`/clients/${id}/regenerate-token`, {})
     setClients(c => c.map(x => x.id === id ? { ...x, portal_token: res.data.token } : x))
     navigator.clipboard.writeText(res.data.portalUrl)
     toast.success('New link generated & copied!')

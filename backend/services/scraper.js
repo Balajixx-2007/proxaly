@@ -5,6 +5,7 @@
 
 const puppeteer = require('puppeteer')
 const cheerio = require('cheerio')
+const axios = require('axios')
 const { v4: uuidv4 } = require('uuid')
 
 const delay = (ms = 2000) => new Promise(r => setTimeout(r, ms + Math.random() * 1000))
@@ -21,6 +22,29 @@ const INDIAN_CITIES = [
 
 const isIndianCity = (city) =>
   INDIAN_CITIES.some(c => city.toLowerCase().includes(c))
+
+const EMAIL_REGEX = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g
+const EMAIL_VALIDATION_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/
+const BLOCKED_WEBSITE_HOSTS = [
+  'google.com',
+  'maps.google.com',
+  'justdial.com',
+  'yellowpages.com',
+  'facebook.com',
+  'instagram.com',
+  'linkedin.com',
+  'youtube.com',
+  'twitter.com',
+  'x.com',
+  'yelp.com',
+]
+
+const QUERY_KEYWORDS = [
+  'marketing agency',
+  'digital marketing agency',
+  'seo agency',
+  'growth agency',
+]
 
 async function launchBrowser() {
   return puppeteer.launch({
@@ -173,7 +197,10 @@ async function scrapeGoogleMaps(businessType, city, maxResults = 15) {
 
     console.log(`  → Extracted ${results.length} raw results`)
 
-    for (const r of results) {
+    const randomOffset = Math.floor(Math.random() * Math.min(5, Math.max(1, Math.floor(results.length / 3))))
+    const randomized = shuffleArray(results).slice(randomOffset)
+
+    for (const r of randomized) {
       if (!r.name || leads.length >= maxResults) continue
       leads.push({
         id: uuidv4(),
@@ -311,7 +338,10 @@ async function scrapeJustdial(businessType, city, maxResults = 15) {
 
     console.log(`  → Found ${items.length} Justdial listings`)
 
-    for (const item of items) {
+    const randomOffset = Math.floor(Math.random() * Math.min(4, Math.max(1, Math.floor(items.length / 3))))
+    const randomized = shuffleArray(items).slice(randomOffset)
+
+    for (const item of randomized) {
       if (leads.length >= maxResults) break
       const phone = item.phone || extractPhone(item.address || '')
       leads.push({
@@ -362,6 +392,7 @@ async function scrapeYellowPages(businessType, city, maxResults = 15) {
     const html = await page.content()
     const $ = cheerio.load(html)
 
+    const rows = []
     $('.result, .organic .v-card, .srp-listing').each((i, el) => {
       if (leads.length >= maxResults) return false
 
@@ -379,7 +410,7 @@ async function scrapeYellowPages(businessType, city, maxResults = 15) {
       const website = $(el).find('a.track-visit-website').attr('href') || null
       const rating = $(el).find('.ratings .count, .ratings .stars').attr('class')?.match(/(\d+)/)?.[1] || null
 
-      leads.push({
+      rows.push({
         id: uuidv4(),
         name: cleanName(name),
         address: address || city,
@@ -393,6 +424,13 @@ async function scrapeYellowPages(businessType, city, maxResults = 15) {
         created_at: new Date().toISOString(),
       })
     })
+
+    const randomOffset = Math.floor(Math.random() * Math.min(4, Math.max(1, Math.floor(rows.length / 3))))
+    const randomized = shuffleArray(rows).slice(randomOffset)
+    for (const row of randomized) {
+      if (leads.length >= maxResults) break
+      leads.push(row)
+    }
 
     console.log(`✅ Yellow Pages: ${leads.length} leads for "${businessType}" in "${city}"`)
   } catch (err) {
@@ -431,6 +469,7 @@ async function scrapeGoogleSearch(businessType, city, maxResults = 10) {
     const $ = cheerio.load(html)
 
     // Extract from Google's local business pack (3-pack)
+    const rows = []
     $('div[data-attrid="kc:/local:expandable_poi_list"] > div, .rllt__details').each((i, el) => {
       if (leads.length >= maxResults) return false
 
@@ -441,7 +480,7 @@ async function scrapeGoogleSearch(businessType, city, maxResults = 10) {
       const phone = extractPhone($(el).text())
       const address = $(el).find('.rllt__wrapped-text, div:nth-child(2)').text().trim()
 
-      leads.push({
+      rows.push({
         id: uuidv4(),
         name: cleanName(name),
         address: address || city,
@@ -467,7 +506,7 @@ async function scrapeGoogleSearch(businessType, city, maxResults = 10) {
         const link = $(el).find('a').first().attr('href')
 
         if (title && !title.toLowerCase().includes('best ') && !title.toLowerCase().includes('top ')) {
-          leads.push({
+          rows.push({
             id: uuidv4(),
             name: cleanName(title),
             address: city,
@@ -482,6 +521,13 @@ async function scrapeGoogleSearch(businessType, city, maxResults = 10) {
           })
         }
       })
+    }
+
+    const randomOffset = Math.floor(Math.random() * Math.min(4, Math.max(1, Math.floor(rows.length / 3))))
+    const randomized = shuffleArray(rows).slice(randomOffset)
+    for (const row of randomized) {
+      if (leads.length >= maxResults) break
+      leads.push(row)
     }
 
     console.log(`✅ Google Search: ${leads.length} leads for "${businessType}" in "${city}"`)
@@ -527,12 +573,309 @@ function isValidPhone(phone) {
   return digits.length >= 7 && digits.length <= 15
 }
 
+function shuffleArray(input) {
+  const arr = [...input]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
+}
+
+function normalizeBusinessName(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function getLeadDedupeMarkers(lead) {
+  const markers = []
+  const domain = getDomainFromWebsite(lead?.website)
+  if (domain) markers.push(`domain:${domain}`)
+  const normalizedName = normalizeBusinessName(lead?.name)
+  if (normalizedName) markers.push(`name:${normalizedName}`)
+  return markers
+}
+
+function isContactableLead(lead) {
+  return Boolean(lead?.email || lead?.phone || lead?.website)
+}
+
+function toContactReadyLead(lead) {
+  const website = normalizeWebsiteUrl(lead.website)
+  return {
+    ...lead,
+    email: sanitizeEmail(lead.email) || null,
+    phone: isValidPhone(lead.phone) ? lead.phone : null,
+    website,
+    contactable: Boolean((sanitizeEmail(lead.email) || null) || (isValidPhone(lead.phone) ? lead.phone : null) || website),
+  }
+}
+
+function normalizeWebsiteUrl(website) {
+  if (!website || typeof website !== 'string') return null
+  const trimmed = website.trim()
+  if (!trimmed) return null
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed
+  return `https://${trimmed}`
+}
+
+function getDomainFromWebsite(website) {
+  try {
+    const normalized = normalizeWebsiteUrl(website)
+    if (!normalized) return null
+    const host = new URL(normalized).hostname.toLowerCase()
+    return host.replace(/^www\./, '')
+  } catch (_) {
+    return null
+  }
+}
+
+function isUsableBusinessWebsite(website) {
+  const domain = getDomainFromWebsite(website)
+  if (!domain) return false
+  return !BLOCKED_WEBSITE_HOSTS.some(host => domain.includes(host))
+}
+
+function extractEmailFromText(text) {
+  if (!text) return null
+  const found = text.match(EMAIL_REGEX) || []
+  for (const item of found) {
+    const email = sanitizeEmail(item)
+    if (email) return email
+  }
+  return null
+}
+
+function sanitizeEmail(value) {
+  if (!value || typeof value !== 'string') return null
+  const email = value.trim().toLowerCase()
+  if (!EMAIL_VALIDATION_REGEX.test(email)) return null
+  if (email.startsWith('//')) return null
+  const [, domain] = email.split('@')
+  if (!domain) return null
+  if (BLOCKED_WEBSITE_HOSTS.some(host => domain.includes(host))) return null
+  return email
+}
+
+function websiteMatchesLead(name, website) {
+  const domain = getDomainFromWebsite(website)
+  if (!domain) return false
+
+  const normalizedDomain = domain.replace(/\.(com|in|co|io|net|org|biz|ai|agency)$/g, '')
+  const tokens = String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter(t => t.length >= 4)
+    .filter(t => !['marketing', 'agency', 'digital', 'company', 'consultant', 'services', 'solutions'].includes(t))
+
+  if (tokens.length === 0) return true
+  return tokens.some(t => normalizedDomain.includes(t))
+}
+
+async function scrapeWebsiteContacts(website) {
+  const normalized = normalizeWebsiteUrl(website)
+  if (!normalized) return { email: null, phone: null }
+
+  const pages = [
+    normalized,
+    `${normalized.replace(/\/$/, '')}/contact`,
+    `${normalized.replace(/\/$/, '')}/contact-us`,
+    `${normalized.replace(/\/$/, '')}/contactus`,
+    `${normalized.replace(/\/$/, '')}/about`,
+    `${normalized.replace(/\/$/, '')}/about-us`,
+  ]
+
+  for (const pageUrl of pages) {
+    try {
+      const { data } = await axios.get(pageUrl, {
+        timeout: 7000,
+        maxRedirects: 3,
+        headers: { 'User-Agent': 'Mozilla/5.0 ProxalyBot/1.0' },
+      })
+
+      const html = typeof data === 'string' ? data : ''
+      if (!html) continue
+
+      const $ = cheerio.load(html)
+      let email = null
+
+      const mailto = $('a[href^="mailto:"]').first().attr('href')
+      if (mailto) {
+        email = sanitizeEmail(mailto.replace('mailto:', '').split('?')[0])
+      }
+
+      if (!email) {
+        const text = $('body').text() || ''
+        email = extractEmailFromText(text)
+      }
+
+      const textBlob = `${$('body').text() || ''} ${html}`
+      const phone = extractPhone(textBlob)
+
+      if (email || phone) {
+        return { email: sanitizeEmail(email) || null, phone: isValidPhone(phone) ? phone : null }
+      }
+    } catch (_) {}
+  }
+
+  return { email: null, phone: null }
+}
+
+async function discoverWebsiteForLead(name, city) {
+  const resolveSearchHref = (href) => {
+    if (!href) return null
+    if (href.startsWith('http') && !href.includes('bing.com/ck/a?')) return href
+
+    try {
+      const parsed = new URL(href.startsWith('http') ? href : `https:${href}`)
+
+      if (parsed.hostname.includes('bing.com') && parsed.pathname.includes('/ck/a')) {
+        const u = parsed.searchParams.get('u')
+        if (u) {
+          const encoded = u.startsWith('a1') ? u.slice(2) : u
+          const padded = encoded + '='.repeat((4 - (encoded.length % 4)) % 4)
+          const decoded = Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
+          if (decoded.startsWith('http')) return decoded
+        }
+      }
+
+      if (parsed.hostname.includes('duckduckgo.com') && parsed.pathname.startsWith('/l/')) {
+        const target = parsed.searchParams.get('uddg')
+        if (target?.startsWith('http')) return decodeURIComponent(target)
+      }
+    } catch (_) {}
+
+    return null
+  }
+
+  try {
+    const query = `${name} ${city} official website`
+    const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=8`
+    const { data } = await axios.get(url, {
+      timeout: 8000,
+      maxRedirects: 3,
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    })
+
+    const html = typeof data === 'string' ? data : ''
+    if (!html) return null
+
+    const $ = cheerio.load(html)
+    const links = []
+    $('li.b_algo h2 a').each((_, el) => {
+      const href = $(el).attr('href')
+      const resolved = resolveSearchHref(href)
+      if (resolved) links.push(resolved)
+    })
+
+    for (const link of links) {
+      if (isUsableBusinessWebsite(link) && websiteMatchesLead(name, link)) {
+        return link
+      }
+    }
+  } catch (_) {}
+
+  try {
+    const query = `${name} ${city} official website`
+    const url = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`
+    const { data } = await axios.get(url, {
+      timeout: 8000,
+      maxRedirects: 3,
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    })
+
+    const html = typeof data === 'string' ? data : ''
+    if (!html) return null
+
+    const $ = cheerio.load(html)
+    const links = []
+    $('a.result__a').each((_, el) => {
+      const href = $(el).attr('href')
+      const resolved = resolveSearchHref(href)
+      if (resolved) links.push(resolved)
+    })
+
+    for (const link of links) {
+      if (isUsableBusinessWebsite(link) && websiteMatchesLead(name, link)) {
+        return link
+      }
+    }
+  } catch (_) {}
+
+  return null
+}
+
+function guessCommonEmails(website) {
+  const domain = getDomainFromWebsite(website)
+  if (!domain) return []
+  return [`info@${domain}`, `contact@${domain}`, `hello@${domain}`, `sales@${domain}`]
+}
+
+async function enrichLeadContacts(leads) {
+  const enriched = []
+
+  for (const lead of leads) {
+    const next = { ...lead }
+    if (!next.website) {
+      const discovered = await discoverWebsiteForLead(next.name || '', next.city || '')
+      if (discovered) next.website = discovered
+    }
+
+    next.website = normalizeWebsiteUrl(next.website)
+
+    if (!next.email && !next.phone && next.website) {
+      const scraped = await scrapeWebsiteContacts(next.website)
+      if (scraped.email) next.email = scraped.email
+      // Preserve maps/directories phone and only fill if missing.
+      if (!next.phone && scraped.phone) next.phone = scraped.phone
+
+      if (!next.email) {
+        const guesses = guessCommonEmails(next.website)
+        if (guesses.length > 0) next.email = sanitizeEmail(guesses[0])
+      }
+    } else if (!next.email && next.website) {
+      const guesses = guessCommonEmails(next.website)
+      if (guesses.length > 0) next.email = sanitizeEmail(guesses[0])
+    }
+
+    enriched.push(toContactReadyLead(next))
+  }
+
+  return enriched
+}
+
+function pickSearchKeyword(businessType) {
+  const pool = [...new Set([businessType, ...QUERY_KEYWORDS])]
+  return pool[Math.floor(Math.random() * pool.length)]
+}
+
+function dedupeLeads(leads) {
+  const seen = new Set()
+  const deduped = []
+
+  for (const lead of leads) {
+    const markers = getLeadDedupeMarkers(lead)
+    if (markers.length === 0) continue
+    if (markers.some(marker => seen.has(marker))) continue
+    markers.forEach(marker => seen.add(marker))
+    deduped.push(lead)
+  }
+
+  return deduped
+}
+
 /**
  * Smart scraper — picks the best source for the city
  * Falls back automatically if primary source returns 0 leads
  */
 async function scrapeLeads({ businessType, city, source = 'auto', maxResults = 15 }) {
-  console.log(`\n🔍 Scraping: "${businessType}" in "${city}" [source: ${source}]`)
+  const keyword = pickSearchKeyword(businessType)
+  console.log(`\n🔍 Scraping: "${keyword}" in "${city}" [source: ${source}]`)
 
   const indian = isIndianCity(city)
 
@@ -547,19 +890,19 @@ async function scrapeLeads({ businessType, city, source = 'auto', maxResults = 1
   // Try primary source first
   switch (primarySource) {
     case 'justdial':
-      leads = await scrapeJustdial(businessType, city, maxResults)
+      leads = await scrapeJustdial(keyword, city, maxResults + 8)
       break
     case 'yellowpages':
-      leads = await scrapeYellowPages(businessType, city, maxResults)
+      leads = await scrapeYellowPages(keyword, city, maxResults + 8)
       break
     case 'google_search':
-      leads = await scrapeGoogleSearch(businessType, city, maxResults)
+      leads = await scrapeGoogleSearch(keyword, city, maxResults + 8)
       break
     case 'google_maps':
-      leads = await scrapeGoogleMaps(businessType, city, maxResults)
+      leads = await scrapeGoogleMaps(keyword, city, maxResults + 8)
       break
     default:
-      leads = await scrapeGoogleMaps(businessType, city, maxResults)
+      leads = await scrapeGoogleMaps(keyword, city, maxResults + 8)
   }
 
   // Fallback chain: if primary gave 0 results
@@ -567,21 +910,27 @@ async function scrapeLeads({ businessType, city, source = 'auto', maxResults = 1
     console.log(`⚠️  Primary source (${primarySource}) returned 0 leads. Trying fallback...`)
 
     if (primarySource !== 'google_maps') {
-      leads = await scrapeGoogleMaps(businessType, city, maxResults)
+      leads = await scrapeGoogleMaps(keyword, city, maxResults + 8)
     }
 
     if (leads.length === 0) {
       console.log('⚠️  Google Maps also returned 0. Trying Google Search...')
-      leads = await scrapeGoogleSearch(businessType, city, maxResults)
+      leads = await scrapeGoogleSearch(keyword, city, maxResults + 8)
     }
 
     if (leads.length === 0 && indian) {
-      leads = await scrapeJustdial(businessType, city, maxResults)
+      leads = await scrapeJustdial(keyword, city, maxResults + 8)
     }
   }
 
-  console.log(`\n✅ Total leads scraped: ${leads.length}`)
-  return leads
+  const shuffled = shuffleArray(leads)
+  const deduped = dedupeLeads(shuffled)
+  const contactEnriched = await enrichLeadContacts(deduped)
+  const contactable = contactEnriched.filter(isContactableLead)
+  const fresh = shuffleArray(contactable).slice(0, maxResults)
+
+  console.log(`\n✅ Total leads scraped: ${fresh.length}`)
+  return fresh
 }
 
 module.exports = {

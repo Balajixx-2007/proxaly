@@ -11,12 +11,52 @@ const { enrichLead, enrichLeadsBatch } = require('../services/groq')
 const { findEmail } = require('../services/emailFinder')
 const { getClient } = require('../services/supabase')
 const { v4: uuidv4 } = require('uuid')
+const axios = require('axios')
+const { normalizeLeadStatus } = require('../utils/leadSchema')
+
+const ALLOWED_BUSINESS_TYPES = new Set([
+  'marketing agency',
+  'digital agency',
+  'consultant',
+  'web design company',
+])
 
 const scrapeLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
   message: { error: 'Too many scrape requests. Please wait 1 minute.' },
 })
+
+function normalizeName(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function domainFromWebsite(website) {
+  try {
+    if (!website) return null
+    const normalized = website.startsWith('http') ? website : `https://${website}`
+    return new URL(normalized).hostname.toLowerCase().replace(/^www\./, '')
+  } catch (_) {
+    return null
+  }
+}
+
+function dedupeMarkers(lead) {
+  const markers = []
+  const domain = domainFromWebsite(lead?.website)
+  if (domain) markers.push(`domain:${domain}`)
+  const normalized = normalizeName(lead?.name)
+  if (normalized) markers.push(`name:${normalized}`)
+  return markers
+}
+
+function isUsableLead(lead) {
+  return Boolean(lead?.email || lead?.phone || lead?.website)
+}
 
 // ── GET /api/leads ────────────────────────────────────────────────────────────
 router.get('/', requireAuth, async (req, res) => {
@@ -52,24 +92,58 @@ router.post('/scrape', requireAuth, scrapeLimiter, async (req, res) => {
     return res.status(400).json({ error: 'businessType and city are required' })
   }
 
+  const normalizedBusinessType = businessType.trim().toLowerCase()
+  if (!ALLOWED_BUSINESS_TYPES.has(normalizedBusinessType)) {
+    return res.status(400).json({
+      error: 'Unsupported business type. Use one of: marketing agency, digital agency, consultant, web design company.',
+    })
+  }
+
   try {
     const rawLeads = await scrapeLeads({
-      businessType: businessType.trim(),
+      businessType: normalizedBusinessType,
       city: city.trim(),
       source,
       maxResults: Math.min(Number(maxResults), 30),
     })
 
-    if (!rawLeads.length) {
+    const usableLeads = rawLeads.filter(isUsableLead)
+
+    if (!usableLeads.length) {
       return res.json({ leads: [], message: 'No leads found. Try a different source or search term.' })
     }
 
     const db = getClient(req)
-    const leadsToInsert = rawLeads.map(lead => ({
-      ...lead,
+    const { data: existing, error: existingError } = await db
+      .from('leads')
+      .select('name, website')
+      .limit(5000)
+
+    if (existingError) throw existingError
+
+    const seenKeys = new Set((existing || []).flatMap(dedupeMarkers))
+    const localKeys = new Set()
+    const unseenLeads = []
+    for (const lead of usableLeads) {
+      const markers = dedupeMarkers(lead)
+      if (markers.length === 0) continue
+      if (markers.some(marker => seenKeys.has(marker) || localKeys.has(marker))) continue
+      markers.forEach(marker => localKeys.add(marker))
+      unseenLeads.push(lead)
+    }
+
+    if (!unseenLeads.length) {
+      return res.json({ leads: [], message: 'No fresh leads found. Try Find New Leads again.' })
+    }
+
+    const leadsToInsert = unseenLeads.map(lead => {
+      const { contactable, ...persistable } = lead
+      return {
+      ...persistable,
       id: uuidv4(),
       user_id: req.user.id,
-    }))
+      }
+    })
 
     const { data: saved, error } = await db
       .from('leads')
@@ -80,16 +154,35 @@ router.post('/scrape', requireAuth, scrapeLimiter, async (req, res) => {
       console.warn('DB insert failed:', error.message)
       // Return results even if DB save fails (e.g. tables not created yet)
       return res.json({
-        leads: rawLeads,
+        leads: unseenLeads.map(lead => ({ ...lead, contactable: isUsableLead(lead) })),
         saved: false,
         message: 'Scraped successfully! Run the SQL schema in Supabase to save leads permanently.'
       })
     }
 
-    res.json({ leads: saved || rawLeads, total: (saved || rawLeads).length })
+    const responseLeads = (saved || unseenLeads).map(lead => ({ ...lead, contactable: isUsableLead(lead) }))
+    res.json({ leads: responseLeads, total: responseLeads.length })
   } catch (err) {
     console.error('Scrape error:', err.message)
     res.status(500).json({ error: `Scraping failed: ${err.message}` })
+  }
+})
+
+// ── DELETE /api/leads/bulk-delete ────────────────────────────────────────────
+router.delete('/bulk-delete', requireAuth, async (req, res) => {
+  const { ids } = req.body || {}
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'Provide an array of lead IDs' })
+  }
+
+  try {
+    const db = getClient(req)
+    const { error } = await db.from('leads').delete().in('id', ids)
+    if (error) throw error
+    res.json({ success: true, deleted: ids.length })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
   }
 })
 
@@ -229,6 +322,10 @@ router.patch('/:id', requireAuth, async (req, res) => {
     if (key in req.body) updates[key] = req.body[key]
   }
 
+  if ('status' in updates) {
+    updates.status = normalizeLeadStatus(updates.status)
+  }
+
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: 'No valid fields to update' })
   }
@@ -322,19 +419,18 @@ router.post('/send-to-agent', requireAuth, async (req, res) => {
           continue
         }
 
-        const response = await fetch(`${marketingAgentUrl}/api/leads`, {
-          method: 'POST',
+        const response = await axios.post(`${marketingAgentUrl}/api/leads`, payload, {
+          timeout: 5000,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          timeout: 5000
+          validateStatus: () => true,
         })
 
-        if (response.ok) {
+        if (response.status >= 200 && response.status < 300) {
           sent++
           console.log(`[Marketing Agent] ✅ Sent: ${lead.name} (${lead.email})`)
         } else {
           failed++
-          errors.push(`${lead.name}: ${await response.text()}`)
+          errors.push(`${lead.name}: ${typeof response.data === 'string' ? response.data : JSON.stringify(response.data)}`)
           console.log(`[Marketing Agent] ❌ Failed: ${lead.name} - ${response.status}`)
         }
       } catch (err) {
@@ -348,10 +444,9 @@ router.post('/send-to-agent', requireAuth, async (req, res) => {
     if (sent > 0) {
       try {
         console.log(`[Marketing Agent] Starting agent loop...`)
-        await fetch(`${marketingAgentUrl}/api/agent/start`, {
-          method: 'POST',
+        await axios.post(`${marketingAgentUrl}/api/agent/start`, {}, {
+          timeout: 5000,
           headers: { 'Content-Type': 'application/json' },
-          timeout: 5000
         })
         console.log(`[Marketing Agent] ✅ Agent started`)
       } catch (err) {
@@ -386,11 +481,12 @@ router.get('/agent/status', requireAuth, async (req, res) => {
   try {
     console.log(`[Marketing Agent] Fetching status from ${marketingAgentUrl}`)
     
-    const response = await fetch(`${marketingAgentUrl}/api/agent/status`, {
-      timeout: 5000
+    const response = await axios.get(`${marketingAgentUrl}/api/agent/status`, {
+      timeout: 5000,
+      validateStatus: () => true,
     })
 
-    if (!response.ok) {
+    if (response.status < 200 || response.status >= 300) {
       console.warn(`[Marketing Agent] Status check failed: ${response.status}`)
       return res.status(503).json({
         error: 'Marketing Agent unreachable',
@@ -398,8 +494,7 @@ router.get('/agent/status', requireAuth, async (req, res) => {
       })
     }
 
-    const data = await response.json()
-    res.json(data)
+    res.json(response.data)
   } catch (err) {
     console.error('[Marketing Agent] Status check error:', err.message)
     res.status(503).json({

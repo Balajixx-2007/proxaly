@@ -6,7 +6,8 @@
 const express = require('express')
 const router = express.Router()
 const { requireAuth } = require('../middleware/auth')
-const { getClient, supabaseAdmin } = require('../services/supabase')
+const { getClient } = require('../services/supabase')
+const { LEAD_STATUS, statusIn, normalizeLeadStatus, getLeadScore } = require('../utils/leadSchema')
 
 // ── GET /api/analytics/overview ─────────────────────────────────────────────
 router.get('/overview', requireAuth, async (req, res) => {
@@ -18,7 +19,7 @@ router.get('/overview', requireAuth, async (req, res) => {
     // All leads in period
     const { data: leads, error } = await db
       .from('leads')
-      .select('id, status, score, source, niche, created_at, contacted_at, enriched')
+      .select('id, status, ai_score, score, source, niche, created_at, contacted_at, enriched')
       .gte('created_at', since)
 
     if (error) throw error
@@ -31,7 +32,10 @@ router.get('/overview', requireAuth, async (req, res) => {
 
     // Status breakdown
     const byStatus = {}
-    all.forEach(l => { byStatus[l.status] = (byStatus[l.status] || 0) + 1 })
+    all.forEach(l => {
+      const status = normalizeLeadStatus(l.status)
+      byStatus[status] = (byStatus[status] || 0) + 1
+    })
 
     // Source breakdown
     const bySource = {}
@@ -48,7 +52,7 @@ router.get('/overview', requireAuth, async (req, res) => {
     // Score distribution
     const scoreDistribution = { low: 0, medium: 0, high: 0 }
     all.forEach(l => {
-      const s = l.score || 0
+      const s = getLeadScore(l)
       if (s >= 8) scoreDistribution.high++
       else if (s >= 5) scoreDistribution.medium++
       else scoreDistribution.low++
@@ -67,10 +71,10 @@ router.get('/overview', requireAuth, async (req, res) => {
     const funnel = {
       scraped: all.length,
       enriched: all.filter(l => l.enriched).length,
-      contacted: all.filter(l => ['Contacted', 'Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      replied: all.filter(l => ['Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      meetings: all.filter(l => l.status === 'Meeting Booked').length,
-      clients: all.filter(l => l.status === 'Client').length,
+      contacted: all.filter(l => statusIn(l.status, [LEAD_STATUS.CONTACTED, LEAD_STATUS.REPLIED, LEAD_STATUS.MEETING_BOOKED, LEAD_STATUS.CLIENT])).length,
+      replied: all.filter(l => statusIn(l.status, [LEAD_STATUS.REPLIED, LEAD_STATUS.MEETING_BOOKED, LEAD_STATUS.CLIENT])).length,
+      meetings: all.filter(l => statusIn(l.status, [LEAD_STATUS.MEETING_BOOKED])).length,
+      clients: all.filter(l => statusIn(l.status, [LEAD_STATUS.CLIENT])).length,
     }
 
     // Rates
@@ -79,7 +83,7 @@ router.get('/overview', requireAuth, async (req, res) => {
     const enrichRate = funnel.scraped > 0 ? Math.round((funnel.enriched / funnel.scraped) * 100) : 0
 
     // Avg quality score
-    const scores = all.map(l => l.score || 0).filter(s => s > 0)
+    const scores = all.map(l => getLeadScore(l)).filter(s => s > 0)
     const avgScore = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0
 
     res.json({
@@ -135,14 +139,14 @@ router.post('/report/send', requireAuth, async (req, res) => {
 
     // Get analytics data
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const { data: leads } = await db.from('leads').select('status, score, created_at').gte('created_at', since)
+    const { data: leads } = await db.from('leads').select('status, ai_score, score, created_at').gte('created_at', since)
     const all = leads || []
 
     const stats = {
       scraped: all.length,
-      contacted: all.filter(l => ['Contacted', 'Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      replied: all.filter(l => ['Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      meetings: all.filter(l => l.status === 'Meeting Booked').length,
+      contacted: all.filter(l => statusIn(l.status, [LEAD_STATUS.CONTACTED, LEAD_STATUS.REPLIED, LEAD_STATUS.MEETING_BOOKED, LEAD_STATUS.CLIENT])).length,
+      replied: all.filter(l => statusIn(l.status, [LEAD_STATUS.REPLIED, LEAD_STATUS.MEETING_BOOKED, LEAD_STATUS.CLIENT])).length,
+      meetings: all.filter(l => statusIn(l.status, [LEAD_STATUS.MEETING_BOOKED])).length,
     }
 
     // Send report email via Brevo
@@ -208,7 +212,9 @@ function buildReportHTML(stats, label = 'Last 7 Days') {
 }
 
 async function sendReportEmail(toEmail, html, brevoKey) {
-  const fetch = require('node-fetch')
+  if (typeof fetch !== 'function') {
+    throw new Error('Global fetch API is unavailable on this Node runtime')
+  }
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: { 'api-key': brevoKey, 'Content-Type': 'application/json' },

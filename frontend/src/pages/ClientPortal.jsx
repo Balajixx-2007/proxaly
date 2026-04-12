@@ -58,7 +58,7 @@ export default function ClientPortal() {
   const [error, setError] = useState(null)
   const [branding, setBranding] = useState({
     name: 'Proxaly',
-    tagline: 'AI-Powered Lead Generation & Outreach',
+    tagline: 'AI-Powered Contact-Ready Prospecting & Outreach',
     logoUrl: '',
     primaryColor: '#7c3aed',
     accentColor: '#22d3ee',
@@ -82,7 +82,7 @@ export default function ClientPortal() {
         if (b) {
           setBranding({
             name: b.agency_name || 'Proxaly',
-            tagline: b.agency_tagline || 'AI-Powered Lead Generation & Outreach',
+            tagline: b.agency_tagline || 'AI-Powered Contact-Ready Prospecting & Outreach',
             logoUrl: b.logo_url || '',
             primaryColor: b.primary_color || '#7c3aed',
             accentColor: b.accent_color || '#22d3ee',
@@ -241,7 +241,7 @@ export default function ClientPortal() {
         {/* Footer */}
         <div style={{ textAlign: 'center', marginTop: 48, paddingTop: 24, borderTop: '1px solid rgba(139,92,246,0.08)' }}>
           <div style={{ fontSize: 12, color: 'rgba(148,163,184,0.35)' }}>
-            Powered by <strong style={{ color: 'rgba(139,92,246,0.6)' }}>Proxaly</strong> — AI-Powered Lead Generation & Outreach
+            Powered by <strong style={{ color: 'rgba(139,92,246,0.6)' }}>Proxaly</strong> — AI-Powered Contact-Ready Prospecting & Outreach
           </div>
         </div>
       </div>

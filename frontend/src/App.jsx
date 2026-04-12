@@ -14,6 +14,7 @@ import ClientPortal from './pages/ClientPortal'
 import Analytics from './pages/Analytics'
 import Channels from './pages/Channels'
 import Branding from './pages/Branding'
+import EmailCampaign from './pages/EmailCampaign'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -58,6 +59,7 @@ function AppRoutes() {
                 <Route path="/clients" element={<Clients />} />
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/channels" element={<Channels />} />
+                <Route path="/email" element={<EmailCampaign />} />
                 <Route path="/branding" element={<Branding />} />
                 <Route path="/billing" element={<Billing />} />
                 <Route path="/automation" element={<Automation />} />

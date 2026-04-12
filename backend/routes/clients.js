@@ -7,6 +7,9 @@ const express = require('express')
 const router = express.Router()
 const { createClient } = require('@supabase/supabase-js')
 const crypto = require('crypto')
+const { requireAuth } = require('../middleware/auth')
+const { getClient } = require('../services/supabase')
+const { LEAD_STATUS, statusIn, normalizeLeadStatus } = require('../utils/leadSchema')
 
 function getSupabase() {
   return createClient(
@@ -16,11 +19,10 @@ function getSupabase() {
 }
 
 // ── List all clients for the authenticated user ─────────────────────────────
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
-    const supabase = getSupabase()
-    const userId = req.headers['x-user-id']
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+    const supabase = getClient(req)
+    const userId = req.user.id
 
     const { data, error } = await supabase
       .from('clients')
@@ -36,11 +38,10 @@ router.get('/', async (req, res) => {
 })
 
 // ── Create a new client ──────────────────────────────────────────────────────
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
   try {
-    const supabase = getSupabase()
-    const userId = req.headers['x-user-id']
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+    const supabase = getClient(req)
+    const userId = req.user.id
 
     const { name, email, businessName, niche, plan, notes } = req.body
     if (!name || !email) return res.status(400).json({ error: 'Name and email required' })
@@ -77,11 +78,10 @@ router.post('/', async (req, res) => {
 })
 
 // ── Update client ────────────────────────────────────────────────────────────
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAuth, async (req, res) => {
   try {
-    const supabase = getSupabase()
-    const userId = req.headers['x-user-id']
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+    const supabase = getClient(req)
+    const userId = req.user.id
 
     const { data, error } = await supabase
       .from('clients')
@@ -99,11 +99,10 @@ router.put('/:id', async (req, res) => {
 })
 
 // ── Delete client ────────────────────────────────────────────────────────────
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAuth, async (req, res) => {
   try {
-    const supabase = getSupabase()
-    const userId = req.headers['x-user-id']
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+    const supabase = getClient(req)
+    const userId = req.user.id
 
     const { error } = await supabase
       .from('clients')
@@ -119,11 +118,10 @@ router.delete('/:id', async (req, res) => {
 })
 
 // ── Regenerate portal token ──────────────────────────────────────────────────
-router.post('/:id/regenerate-token', async (req, res) => {
+router.post('/:id/regenerate-token', requireAuth, async (req, res) => {
   try {
-    const supabase = getSupabase()
-    const userId = req.headers['x-user-id']
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+    const supabase = getClient(req)
+    const userId = req.user.id
 
     const newToken = crypto.randomBytes(24).toString('hex')
 
@@ -171,20 +169,20 @@ router.get('/portal/:token', async (req, res) => {
     // Compute stats
     const stats = {
       totalLeads: allLeads.length,
-      emailsSent: allLeads.filter(l => ['Contacted', 'Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      replies: allLeads.filter(l => ['Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      meetingsBooked: allLeads.filter(l => l.status === 'Meeting Booked').length,
-      clients: allLeads.filter(l => l.status === 'Client').length,
+      emailsSent: allLeads.filter(l => statusIn(l.status, [LEAD_STATUS.CONTACTED, LEAD_STATUS.REPLIED, LEAD_STATUS.MEETING_BOOKED, LEAD_STATUS.CLIENT])).length,
+      replies: allLeads.filter(l => statusIn(l.status, [LEAD_STATUS.REPLIED, LEAD_STATUS.MEETING_BOOKED, LEAD_STATUS.CLIENT])).length,
+      meetingsBooked: allLeads.filter(l => statusIn(l.status, [LEAD_STATUS.MEETING_BOOKED])).length,
+      clients: allLeads.filter(l => statusIn(l.status, [LEAD_STATUS.CLIENT])).length,
     }
 
     // Build activity timeline
     const recentActivity = allLeads
-      .filter(l => l.status !== 'New')
+      .filter(l => !statusIn(l.status, [LEAD_STATUS.NEW]))
       .slice(0, 10)
       .map(l => ({
         name: l.name,
         company: l.company,
-        status: l.status,
+        status: normalizeLeadStatus(l.status),
         date: l.created_at
       }))
 

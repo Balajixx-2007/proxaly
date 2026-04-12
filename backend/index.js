@@ -21,10 +21,14 @@ const clientsRouter = require('./routes/clients')
 const { router: analyticsRouter } = require('./routes/analytics')
 const channelsRouter = require('./routes/channels')
 const { router: brandingRouter } = require('./routes/branding')
+const emailRouter = require('./routes/email')
+const { initMonitoring, captureException } = require('./services/monitoring')
 
 
 const app = express()
 const PORT = process.env.PORT || 3001
+
+initMonitoring()
 
 // ── Security middleware ─────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }))
@@ -49,7 +53,7 @@ app.use(rateLimit({
 }))
 
 // ── Body parsing ────────────────────────────────────────────────────────────
-app.use(express.json({ limit: '10mb' }))
+app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true }))
 
 // ── Logging ─────────────────────────────────────────────────────────────────
@@ -78,6 +82,7 @@ app.use('/api/clients', clientsRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/channels', channelsRouter);
 app.use('/api/branding', brandingRouter);
+app.use('/api/email', emailRouter);
 
 
 // ── 404 handler ──────────────────────────────────────────────────────────────
@@ -89,10 +94,11 @@ app.use('*', (req, res) => {
 app.use((err, req, res, next) => {
   console.error('❌ Unhandled error:', err.message)
   console.error(err.stack)
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+  captureException(err, {
+    tags: { scope: 'api' },
+    extra: { path: req.originalUrl, method: req.method }
   })
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' })
 })
 
 // ── Initialize automation service ────────────────────────────────────────────

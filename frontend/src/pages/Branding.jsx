@@ -44,7 +44,7 @@ function PortalPreview({ branding }) {
   const primary = branding.primaryColor || '#7c3aed'
   const accent = branding.accentColor || '#22d3ee'
   const name = branding.agencyName || 'Your Agency'
-  const tagline = branding.agencyTagline || 'AI-Powered Lead Generation'
+  const tagline = branding.agencyTagline || 'AI-Powered Contact-Ready Prospecting'
   const logo = branding.logoUrl
 
   return (

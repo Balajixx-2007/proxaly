@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
+import api from '../lib/api'
+import { supabase } from '../lib/supabase'
 import {
   Play, Square, Zap, RefreshCw, Plus, Trash2,
   Clock, CheckCircle, AlertCircle, Activity, Target, Settings2
@@ -50,7 +52,7 @@ export default function Automation() {
 
   async function fetchStatus() {
     try {
-      const res = await axios.get(`${API}/automation/status`)
+    const res = await api.get('/automation/status')
       const d = res.data
       setStatus(d)
       setTargets(d.targets || [])
@@ -62,9 +64,14 @@ export default function Automation() {
   }
 
   // ── SSE real-time log stream ──────────────────────────────────────────────
-  function connectSSE() {
+  async function connectSSE() {
     if (esRef.current) esRef.current.close()
-    const es = new EventSource(`${API}/automation/stream`)
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) return
+
+    const streamUrl = `${API}/automation/stream?token=${encodeURIComponent(token)}`
+    const es = new EventSource(streamUrl)
     esRef.current = es
     es.onmessage = (evt) => {
       try {
@@ -83,10 +90,10 @@ export default function Automation() {
     setLoading(true)
     try {
       if (status?.running) {
-        await axios.post(`${API}/automation/stop`)
+        await api.post('/automation/stop')
         toast.success('Automation stopped')
       } else {
-        await axios.post(`${API}/automation/start`)
+        await api.post('/automation/start')
         toast.success('Automation started!')
       }
       await fetchStatus()
@@ -96,7 +103,7 @@ export default function Automation() {
   async function handleRunNow() {
     setLoading(true)
     try {
-      await axios.post(`${API}/automation/run-now`)
+      await api.post('/automation/run-now')
       toast.success('Automation tick started! Watch the logs below.')
     } catch { toast.error('Failed to trigger run') } finally { setLoading(false) }
   }
@@ -104,7 +111,7 @@ export default function Automation() {
   async function handleSave() {
     setLoading(true)
     try {
-      await axios.put(`${API}/automation/targets`, {
+      await api.put('/automation/targets', {
         targets,
         schedule: schedHours,
         minScore

@@ -11,6 +11,10 @@ const axios = require('axios')
 const { scrapeLeads } = require('./scraper')
 const { enrichLeadsBatch } = require('./groq')
 const { supabaseAdmin } = require('./supabase')
+const { LEAD_STATUS, statusIn, getLeadScore } = require('../utils/leadSchema')
+const agentQueue = require('./agentQueue')
+const { captureException } = require('./monitoring')
+const emailOutreach = require('./emailOutreach')
 
 // ── Pub/sub for real-time SSE streaming ─────────────────────────────────────
 const subscribers = new Set()
@@ -37,11 +41,10 @@ let automationState = {
   currentlyRunning: false,
   logs: [],
   targets: [
-    { businessType: 'digital marketing agency', city: 'New York' },
-    { businessType: 'dental clinic', city: 'Chennai' },
-    { businessType: 'real estate agent', city: 'Mumbai' },
-    { businessType: 'law firm', city: 'Bangalore' },
-    { businessType: 'software company', city: 'Hyderabad' },
+    { businessType: 'marketing agency', city: 'Chennai' },
+    { businessType: 'digital agency', city: 'Mumbai' },
+    { businessType: 'consultant', city: 'Bangalore' },
+    { businessType: 'web design company', city: 'Hyderabad' },
   ],
   scheduleHours: 6,
   minScore: 7,
@@ -72,6 +75,10 @@ function log(message, level = 'INFO') {
 
   // Broadcast to all SSE subscribers
   broadcast(entry)
+
+  if (level === 'ERROR') {
+    captureException(new Error(message), { tags: { scope: 'automation' } })
+  }
 
   saveState()
 }
@@ -136,17 +143,56 @@ async function sendToMarketingAgent(lead) {
     }
     const res = await axios.post(`${MARKETING_AGENT_URL}/api/leads`, payload, {
       timeout: 5000,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      validateStatus: () => true,
     })
     if (res.status === 200 || res.status === 201) {
       log(`Sent to Marketing Agent: ${lead.name} (${lead.email})`)
       return true
     }
+    log(`Marketing Agent rejected ${lead.name}: HTTP ${res.status}`, 'WARN')
     return false
   } catch (err) {
     log(`Send error for ${lead.name}: ${err.message}`, 'WARN')
     return false
   }
+}
+
+async function enqueueFailedLead(lead, reason = 'send_failed') {
+  if (!lead?.email) return
+  try {
+    await agentQueue.enqueueLead({ ...lead, queue_reason: reason })
+  } catch (err) {
+    log(`Queue insert failed for ${lead.name}: ${err.message}`, 'ERROR')
+  }
+}
+
+async function retryQueuedLeads(limit = 50) {
+  let queue = []
+  try {
+    queue = await agentQueue.getPending(limit)
+  } catch (err) {
+    log(`Queue fetch failed: ${err.message}`, 'ERROR')
+    return
+  }
+
+  if (queue.length === 0) return
+
+  let sent = 0
+  for (const item of queue) {
+    const claimed = await agentQueue.claimPending(item.id)
+    if (!claimed) continue
+
+    const ok = await sendToMarketingAgent(claimed.payload)
+    if (ok) {
+      sent++
+      await agentQueue.markSent(claimed.id)
+      continue
+    }
+    await agentQueue.markFailed(claimed.id, claimed.retries, 5)
+  }
+
+  if (sent > 0) log(`Retried queue and delivered ${sent} lead(s)`, 'INFO')
 }
 
 // ── Main tick ─────────────────────────────────────────────────────────────────
@@ -161,6 +207,8 @@ async function runAutomationTick() {
   log('Automation tick started')
 
   try {
+    await retryQueuedLeads()
+
     // 1 — Scrape
     let allLeads = []
     const targets = automationState.targets
@@ -206,9 +254,20 @@ async function runAutomationTick() {
 
     log(`Enriched ${enriched.length} leads with AI`)
 
-    // 3 — Filter quality
+    // 3 — Keep only contactable leads (email or phone)
+    const contactable = enriched.filter(l => Boolean(l.email || l.phone))
+    log(`Filtered to ${contactable.length} contactable leads (email or phone)`)
+
+    if (contactable.length === 0) {
+      log('No contactable leads after filtering', 'WARN')
+      automationState.currentlyRunning = false
+      saveState()
+      return
+    }
+
+    // 4 — Filter quality
     const minScore = automationState.minScore
-    const quality = enriched.filter(l => (l.ai_score || 0) >= minScore)
+    const quality = contactable.filter(l => (l.ai_score || 0) >= minScore)
     log(`Filtered to ${quality.length} quality leads score ${minScore}+`)
 
     if (quality.length === 0) {
@@ -217,8 +276,7 @@ async function runAutomationTick() {
       saveState()
       return
     }
-
-    // 4 — Deduplicate
+    // 5 — Deduplicate
     const newLeads = []
     for (const lead of quality) {
       if (!(await isDuplicate(lead))) newLeads.push(lead)
@@ -232,10 +290,10 @@ async function runAutomationTick() {
       return
     }
 
-    // 5 — Save to Supabase
+    // 6 — Save to Supabase
     const toSave = newLeads.map(l => ({
       ...l,
-      status: 'new',
+      status: LEAD_STATUS.NEW,
       created_at: new Date().toISOString(),
       enriched_at: new Date().toISOString()
     }))
@@ -253,10 +311,14 @@ async function runAutomationTick() {
 
     automationState.totalLeadsToday += newLeads.length
 
-    // 6 — Send to Marketing Agent
+    // 7 — Send to Marketing Agent
     let sent = 0
     for (const lead of newLeads) {
-      if (await sendToMarketingAgent(lead)) sent++
+      if (await sendToMarketingAgent(lead)) {
+        sent++
+      } else {
+        await enqueueFailedLead(lead)
+      }
     }
     log(`Sent ${sent} leads to Marketing Agent`)
     automationState.totalSentToday += sent
@@ -356,15 +418,16 @@ cron.schedule('0 8 * * 1', async () => {
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const { data: leads } = await supabaseAdmin
       .from('leads')
-      .select('status, score, created_at')
+      .select('status, ai_score, score, created_at')
       .gte('created_at', since)
 
     const all = leads || []
     const stats = {
       scraped: all.length,
-      contacted: all.filter(l => ['Contacted', 'Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      replied: all.filter(l => ['Replied', 'Meeting Booked', 'Client'].includes(l.status)).length,
-      meetings: all.filter(l => l.status === 'Meeting Booked').length,
+      contacted: all.filter(l => statusIn(l.status, [LEAD_STATUS.CONTACTED, LEAD_STATUS.REPLIED, LEAD_STATUS.MEETING_BOOKED, LEAD_STATUS.CLIENT])).length,
+      replied: all.filter(l => statusIn(l.status, [LEAD_STATUS.REPLIED, LEAD_STATUS.MEETING_BOOKED, LEAD_STATUS.CLIENT])).length,
+      meetings: all.filter(l => statusIn(l.status, [LEAD_STATUS.MEETING_BOOKED])).length,
+      averageScore: all.length > 0 ? Math.round((all.reduce((sum, lead) => sum + getLeadScore(lead), 0) / all.length) * 10) / 10 : 0,
     }
 
     const label = `Week of ${new Date(since).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`
@@ -381,6 +444,20 @@ cron.schedule('0 8 * * 1', async () => {
 function init() {
   loadState()
   if (automationState.enabled) startAutomation()
+
+  // Follow-up processor runs every 15 minutes and sends due email sequence steps.
+  cron.schedule('*/15 * * * *', async () => {
+    try {
+      const result = await emailOutreach.processScheduledFollowups(100)
+      if (result.processed > 0) {
+        log(`Email follow-ups processed=${result.processed}, sent=${result.sent}, failed=${result.failed}`)
+      }
+    } catch (err) {
+      log(`Email follow-up scheduler failed: ${err.message}`, 'ERROR')
+      captureException(err, { tags: { scope: 'email_scheduler' } })
+    }
+  })
+
   log('Automation service initialized')
 }
 

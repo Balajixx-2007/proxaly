@@ -9,6 +9,10 @@ const { requireAuth } = require('../middleware/auth')
 const { getClient } = require('../services/supabase')
 const channels = require('../services/channels')
 
+const CONTACTED_LIKE_STATUSES = ['contacted', 'replied', 'Contacted', 'Replied']
+const EMAIL_SENT_LIKE_STATUSES = ['contacted', 'replied', 'meeting_booked', 'client', 'Contacted', 'Replied', 'Meeting Booked', 'Client']
+const LINKEDIN_QUEUE_STATUSES = ['new', 'contacted', 'replied', 'New', 'Contacted', 'Replied']
+
 // ── POST /api/channels/whatsapp/send ────────────────────────────────────────
 // Send a WhatsApp message to a single lead
 router.post('/whatsapp/send', requireAuth, async (req, res) => {
@@ -70,7 +74,7 @@ router.post('/whatsapp/bulk', requireAuth, async (req, res) => {
     const { data: leads } = await db
       .from('leads')
       .select('*')
-      .in('status', ['Contacted', 'Replied'])
+      .in('status', CONTACTED_LIKE_STATUSES)
       .eq('whatsapp_sent', false)
       .not('phone', 'is', null)
       .limit(20)
@@ -150,7 +154,7 @@ router.get('/stats', requireAuth, async (req, res) => {
     const db = getClient(req)
     const { count: waCount } = await db.from('leads').select('*', { count: 'exact', head: true }).eq('whatsapp_sent', true)
     const { count: liCount } = await db.from('leads').select('*', { count: 'exact', head: true }).eq('linkedin_messaged', true)
-    const { count: emailCount } = await db.from('leads').select('*', { count: 'exact', head: true }).in('status', ['Contacted', 'Replied', 'Meeting Booked', 'Client'])
+    const { count: emailCount } = await db.from('leads').select('*', { count: 'exact', head: true }).in('status', EMAIL_SENT_LIKE_STATUSES)
 
     res.json({
       email: emailCount || 0,
@@ -170,7 +174,7 @@ router.get('/whatsapp/queue', requireAuth, async (req, res) => {
     const { data } = await db
       .from('leads')
       .select('id, name, company, phone, status, email, created_at')
-      .in('status', ['Contacted', 'Replied'])
+      .in('status', CONTACTED_LIKE_STATUSES)
       .eq('whatsapp_sent', false)
       .not('phone', 'is', null)
       .order('created_at', { ascending: false })
@@ -190,7 +194,7 @@ router.get('/linkedin/queue', requireAuth, async (req, res) => {
     const { data } = await db
       .from('leads')
       .select('id, name, company, email, status, linkedin_url, observation, created_at')
-      .in('status', ['New', 'Contacted', 'Replied'])
+      .in('status', LINKEDIN_QUEUE_STATUSES)
       .neq('linkedin_messaged', true)
       .order('created_at', { ascending: false })
       .limit(50)

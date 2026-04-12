@@ -1,22 +1,39 @@
 const express = require('express')
 const router = express.Router()
 const automation = require('../services/automation')
+const { requireAuth } = require('../middleware/auth')
+const { supabaseAdmin } = require('../services/supabase')
+
+async function requireSseAuth(req, res, next) {
+  const token = req.query.token
+  if (!token) return res.status(401).json({ error: 'Missing stream token' })
+
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
+    if (error || !user) return res.status(401).json({ error: 'Invalid stream token' })
+    req.user = user
+    req.accessToken = token
+    return next()
+  } catch {
+    return res.status(401).json({ error: 'Stream authentication failed' })
+  }
+}
 
 // GET /api/automation/status
-router.get('/status', (req, res) => {
+router.get('/status', requireAuth, (req, res) => {
   res.json(automation.getStatus())
 })
 
 // GET /api/automation/logs  (also alias /log for frontend compat)
-router.get('/logs', (req, res) => {
+router.get('/logs', requireAuth, (req, res) => {
   res.json(automation.getLogs())
 })
-router.get('/log', (req, res) => {
+router.get('/log', requireAuth, (req, res) => {
   res.json(automation.getLogs())
 })
 
 // SSE — real-time log streaming
-router.get('/stream', (req, res) => {
+router.get('/stream', requireSseAuth, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
@@ -46,26 +63,26 @@ router.get('/stream', (req, res) => {
 })
 
 // POST /api/automation/start
-router.post('/start', (req, res) => {
+router.post('/start', requireAuth, (req, res) => {
   automation.startAutomation()
   res.json({ success: true, status: 'started' })
 })
 
 // POST /api/automation/stop
-router.post('/stop', (req, res) => {
+router.post('/stop', requireAuth, (req, res) => {
   automation.stopAutomation()
   res.json({ success: true, status: 'stopped' })
 })
 
 // POST /api/automation/run-now
-router.post('/run-now', async (req, res) => {
+router.post('/run-now', requireAuth, async (req, res) => {
   // Don't await — respond immediately so UI doesn't time out
   res.json({ success: true, status: 'tick-started' })
   automation.runAutomationTick()
 })
 
 // PUT /api/automation/targets  (handles targets + schedule + minScore)
-router.put('/targets', (req, res) => {
+router.put('/targets', requireAuth, (req, res) => {
   const { targets, schedule, minScore } = req.body
   if (targets) automation.updateTargets(targets)
   if (schedule !== undefined) automation.updateSchedule(schedule)

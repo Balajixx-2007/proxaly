@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react'
 import {
-  MessageCircle, Linkedin, Send, Copy, ExternalLink,
+  MessageCircle, BriefcaseBusiness, Send, Copy, ExternalLink,
   CheckCircle, Phone, RefreshCw, Zap, Info, ChevronRight
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -13,7 +13,7 @@ import api from '../lib/api'
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Zap },
   { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
-  { id: 'linkedin', label: 'LinkedIn', icon: Linkedin },
+  { id: 'linkedin', label: 'LinkedIn', icon: BriefcaseBusiness },
 ]
 
 // ── Channel stat card ─────────────────────────────────────────────────────────

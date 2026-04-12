@@ -6,6 +6,12 @@
 -- Enable UUID extension
 create extension if not exists "uuid-ossp";
 
+-- Migration tracking
+create table if not exists schema_version (
+  version text primary key,
+  applied_at timestamptz default now()
+);
+
 -- ── LEADS TABLE ───────────────────────────────────────────────────────────────
 create table if not exists leads (
   id              uuid primary key default uuid_generate_v4(),
@@ -117,3 +123,92 @@ create trigger leads_updated_at
 create trigger campaigns_updated_at
   before update on campaigns
   for each row execute function update_updated_at();
+
+
+-- ── CLIENTS TABLE ────────────────────────────────────────────────────────────
+create table if not exists clients (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  email text not null,
+  business_name text default '',
+  niche text default '',
+  plan text default 'starter',
+  notes text default '',
+  portal_token text not null unique,
+  status text default 'active',
+  leads_sent integer default 0,
+  meetings_booked integer default 0,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table clients enable row level security;
+
+create policy "Users can manage own clients"
+  on clients for all using (auth.uid() = user_id);
+
+create index if not exists idx_clients_user_created on clients(user_id, created_at desc);
+
+
+-- ── AGENT QUEUE TABLE ───────────────────────────────────────────────────────
+create table if not exists agent_queue (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references auth.users(id) on delete cascade,
+  lead_id uuid,
+  payload jsonb not null,
+  retries int default 0,
+  status text default 'pending',
+  created_at timestamptz default now()
+);
+
+alter table agent_queue enable row level security;
+
+create policy "Users can manage own agent queue"
+  on agent_queue for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create index if not exists idx_agent_queue_status_created
+  on agent_queue(status, created_at asc);
+
+
+-- ── EMAIL OUTREACH TABLES ───────────────────────────────────────────────────
+create table if not exists email_sequences (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  steps jsonb not null,
+  created_at timestamptz default now()
+);
+
+alter table email_sequences enable row level security;
+
+create policy "Users can manage own email_sequences"
+  on email_sequences for all using (auth.uid() = user_id);
+
+create table if not exists email_logs (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  lead_id uuid not null references leads(id) on delete cascade,
+  campaign_id uuid,
+  sequence_id uuid references email_sequences(id) on delete set null,
+  step int not null,
+  status text not null default 'pending',
+  subject text,
+  body text,
+  provider_message_id text,
+  scheduled_at timestamptz,
+  sent_at timestamptz,
+  error_text text,
+  retry_count int default 0,
+  created_at timestamptz default now()
+);
+
+alter table email_logs enable row level security;
+
+create policy "Users can manage own email_logs"
+  on email_logs for all using (auth.uid() = user_id);
+
+create index if not exists idx_email_logs_pending_schedule
+  on email_logs(status, scheduled_at asc);

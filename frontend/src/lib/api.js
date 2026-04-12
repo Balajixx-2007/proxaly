@@ -26,6 +26,7 @@ export const leadsApi = {
   list: (params) => api.get('/leads', { params }),
   update: (id, data) => api.patch(`/leads/${id}`, data),
   delete: (id) => api.delete(`/leads/${id}`),
+  bulkDelete: (ids) => api.delete('/leads/bulk-delete', { data: { ids } }),
   enrich: (id) => api.post(`/leads/${id}/enrich`),
   findEmail: (id) => api.post(`/leads/${id}/find-email`),
   bulkEnrich: (ids) => api.post('/leads/bulk-enrich', { ids }),
@@ -43,6 +44,15 @@ export const campaignsApi = {
   delete: (id) => api.delete(`/campaigns/${id}`),
   addLead: (campaignId, leadId) => api.post(`/campaigns/${campaignId}/leads`, { leadId }),
   removeLead: (campaignId, leadId) => api.delete(`/campaigns/${campaignId}/leads/${leadId}`),
+}
+
+// ----- Email Outreach -----
+export const emailApi = {
+  preview: (body) => api.post('/email/preview', body),
+  send: (body) => api.post('/email/send', body),
+  bulk: (body) => api.post('/email/bulk', body),
+  schedule: (body) => api.post('/email/schedule', body),
+  logs: (params) => api.get('/email/logs', { params }),
 }
 
 // ----- Auth -----

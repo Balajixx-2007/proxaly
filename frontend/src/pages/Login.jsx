@@ -72,7 +72,7 @@ export default function Login() {
               background: 'linear-gradient(135deg, #a78bfa, #22d3ee)',
               WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent'
             }}>Proxaly</h1>
-            <p style={{ fontSize: 12, color: 'rgba(148,163,184,0.5)', margin: 0 }}>AI Lead Generation</p>
+            <p style={{ fontSize: 12, color: 'rgba(148,163,184,0.5)', margin: 0 }}>AI Contact-Ready Prospecting</p>
           </div>
         </div>
 
