@@ -9,7 +9,7 @@ import {
   Building2, Mail, CheckCircle, BarChart2, X, Eye
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import api from '../lib/api'
+import api, { APP_ORIGIN } from '../lib/api'
 
 const PLAN_COLORS = {
   starter: '#a78bfa',
@@ -30,8 +30,7 @@ function StatPill({ icon: Icon, label, value, color }) {
 
 function ClientCard({ client, onDelete, onCopyLink, onRegenToken }) {
   const planColor = PLAN_COLORS[client.plan] || '#a78bfa'
-  const fronendUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://proxaly.vercel.app'
-  const portalUrl = `${fronendUrl}/client/${client.portal_token}`
+  const portalUrl = `${APP_ORIGIN}/client/${client.portal_token}`
 
   return (
     <div style={{
@@ -204,8 +203,7 @@ export default function Clients() {
     const res = await api.post('/clients', form)
     setClients(c => [res.data, ...c])
     toast.success(`Client "${form.name}" created! Portal link copied to clipboard.`)
-    const frontendUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://proxaly.vercel.app'
-    navigator.clipboard.writeText(`${frontendUrl}/client/${res.data.portal_token}`)
+    navigator.clipboard.writeText(`${APP_ORIGIN}/client/${res.data.portal_token}`)
   }
 
   const handleDelete = async (id, name) => {

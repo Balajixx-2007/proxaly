@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
-import api from '../lib/api'
+import api, { API_BASE_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import {
   Play, Square, Zap, RefreshCw, Plus, Trash2,
   Clock, CheckCircle, AlertCircle, Activity, Target, Settings2
 } from 'lucide-react'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+const API = API_BASE_URL
 
 // Log line colour by level
 function logColor(line) {

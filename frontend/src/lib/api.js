@@ -1,10 +1,21 @@
 // API client — talks to our Express backend
 import axios from 'axios'
 
-const BASE = import.meta.env.VITE_API_URL || '/api'
+const BROKEN_API_URLS = new Set([
+  'https://proxaly.production.up.railway.app/api',
+])
+
+const FALLBACK_PROD_API_URL = 'https://proxaly-backend.railway.app/api'
+const envApiUrl = String(import.meta.env.VITE_API_URL || '').trim()
+
+export const API_BASE_URL = envApiUrl && !BROKEN_API_URLS.has(envApiUrl)
+  ? envApiUrl
+  : (import.meta.env.DEV ? '/api' : FALLBACK_PROD_API_URL)
+
+export const APP_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '') || 'https://proxaly.vercel.app'
 
 const api = axios.create({
-  baseURL: BASE,
+  baseURL: API_BASE_URL,
   timeout: 60000,
 })
 
