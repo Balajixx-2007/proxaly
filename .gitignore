@@ -28,3 +28,6 @@ Thumbs.db
 # Puppeteer cache
 .cache/puppeteer/
 backend/.cache/
+
+.vercel
+.env*.local
