@@ -107,12 +107,39 @@ app.use((err, req, res, next) => {
 const automationService = require('./services/automation')
 automationService.init()
 
+// ── Initialize Phase 2 agent service (if enabled) ────────────────────────────
+let agentService = null;
+if (process.env.USE_EXTERNAL_AGENT !== 'true') {
+  try {
+    agentService = require('./agent');
+    (async () => {
+      try {
+        await agentService.initialize();
+        if (process.env.AGENT_AUTOSTART !== 'false') {
+          await agentService.start();
+        }
+        console.log('✓ Phase 2 agent service initialized');
+      } catch (err) {
+        console.error('✗ Agent service initialization failed:', err);
+      }
+    })();
+  } catch (err) {
+    console.warn('⚠ Phase 2 agent service not available (using Phase 1 external agent)');
+  }
+}
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n🚀 Proxaly API running on http://localhost:${PORT}`)
   console.log(`📊 Health: http://localhost:${PORT}/health`)
   console.log(`🔑 Groq:   ${process.env.GROQ_API_KEY ? '✓ configured' : '✗ not set'}`)
-  console.log(`🗃️  Supabase: ${process.env.SUPABASE_URL ? '✓ configured' : '✗ not set'}\n`)
+  console.log(`🗃️  Supabase: ${process.env.SUPABASE_URL ? '✓ configured' : '✗ not set'}`)
+  if (agentService) {
+    console.log(`🤖 Agent:  ✓ Phase 2 (in-process)`)
+  } else {
+    console.log(`🤖 Agent:  ${process.env.MARKETING_AGENT_URL ? '✓ Phase 1 (external)' : '✗ not configured'}`)
+  }
+  console.log('')
 })
 
 module.exports = app
