@@ -3,9 +3,10 @@ import axios from 'axios'
 
 const BROKEN_API_URLS = new Set([
   'https://proxaly.production.up.railway.app/api',
+  'https://proxaly-backend.railway.app/api',
 ])
 
-const FALLBACK_PROD_API_URL = 'https://proxaly-backend.railway.app/api'
+const FALLBACK_PROD_API_URL = 'https://proxaly-production.up.railway.app/api'
 const envApiUrl = String(import.meta.env.VITE_API_URL || '').trim()
 
 export const API_BASE_URL = envApiUrl && !BROKEN_API_URLS.has(envApiUrl)
@@ -27,7 +28,9 @@ api.interceptors.request.use(async (config) => {
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`
     }
-  } catch (_) {}
+  } catch {
+    // Allow requests to proceed unauthenticated if session lookup fails.
+  }
   return config
 })
 

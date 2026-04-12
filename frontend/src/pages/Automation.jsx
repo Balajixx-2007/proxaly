@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import axios from 'axios'
 import api, { API_BASE_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import {
@@ -43,6 +42,7 @@ export default function Automation() {
     fetchStatus()
     connectSSE()
     return () => esRef.current?.close()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Auto-scroll log pane
@@ -77,7 +77,9 @@ export default function Automation() {
       try {
         const { line } = JSON.parse(evt.data)
         setLogs(prev => [...prev.slice(-200), line])
-      } catch (_) {}
+      } catch {
+        // Ignore malformed SSE payloads.
+      }
     }
     es.onerror = () => {
       // SSE disconnected — silently retry after 3s

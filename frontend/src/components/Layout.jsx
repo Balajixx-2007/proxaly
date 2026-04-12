@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import {
   LayoutDashboard, Users, Megaphone, CreditCard, Settings,
-  LogOut, Zap, ChevronLeft, ChevronRight, Menu, X, Building2, BarChart2, MessageCircle, Palette, Mail
+  LogOut, Zap, ChevronLeft, ChevronRight, Building2, BarChart2, MessageCircle, Palette, Mail
 } from 'lucide-react'
 
 const NAV = [

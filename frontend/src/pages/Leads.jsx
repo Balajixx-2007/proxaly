@@ -1,6 +1,6 @@
 ﻿// Leads page — search, table, AI enrich, CSV export, status management
-import { useState, useEffect, useCallback } from 'react'
-import { leadsApi, campaignsApi } from '../lib/api'
+import { useState, useEffect } from 'react'
+import { leadsApi } from '../lib/api'
 import toast from 'react-hot-toast'
 import {
   Search, Download,
@@ -161,17 +161,11 @@ function SearchForm({ onResults, loading, setLoading }) {
   )
 }
 
-function LeadRow({ lead, onStatusChange, onEnrich, onFindEmail, onDelete, selected, onSelect, onSendToAgent, isNew }) {
-  const [enriching, setEnriching] = useState(false)
+function LeadRow({ lead, onStatusChange, onFindEmail, onDelete, selected, onSelect, onSendToAgent, isNew, agentReachable }) {
   const [findingEmail, setFindingEmail] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const contactScore = getContactScore(lead)
   const contactReadiness = getContactReadiness(lead)
-
-  const handleEnrich = async () => {
-    setEnriching(true)
-    try { await onEnrich(lead.id) } finally { setEnriching(false) }
-  }
 
   const handleFindEmail = async () => {
     setFindingEmail(true)
@@ -179,6 +173,10 @@ function LeadRow({ lead, onStatusChange, onEnrich, onFindEmail, onDelete, select
   }
 
   const handleSendOne = async () => {
+    if (!agentReachable) {
+      toast.error('Marketing Agent is unreachable. Check agent service and backend MARKETING_AGENT_URL.')
+      return
+    }
     setShowMenu(false)
     await onSendToAgent([lead.id])
   }
@@ -345,10 +343,11 @@ function LeadRow({ lead, onStatusChange, onEnrich, onFindEmail, onDelete, select
               borderRadius: 6, padding: '4px 0', zIndex: 100, minWidth: 140,
               boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
             }}>
-              <button onClick={handleSendOne} style={{
+              <button onClick={handleSendOne} disabled={!agentReachable} title={!agentReachable ? 'Marketing Agent is unreachable. Check MARKETING_AGENT_URL and agent service.' : ''} style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
                 width: '100%', border: 'none', background: 'transparent', color: '#a78bfa',
-                cursor: 'pointer', fontSize: 12, textAlign: 'left'
+                cursor: agentReachable ? 'pointer' : 'not-allowed', fontSize: 12, textAlign: 'left',
+                opacity: agentReachable ? 1 : 0.55
               }}>
                 <Send size={12} /> Send to Agent
               </button>
@@ -470,19 +469,6 @@ export default function Leads() {
     }
   }
 
-  const handleEnrich = async (id) => {
-    try {
-      const res = await leadsApi.enrich(id)
-      const updated = res.data?.lead
-      if (updated) {
-        setLeads(prev => prev.map(l => l.id === id ? { ...l, ...updated } : l))
-        toast.success('AI enrichment complete! ✨')
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Enrichment failed')
-    }
-  }
-
   const handleFindEmail = async (id) => {
     try {
       const res = await leadsApi.findEmail(id)
@@ -549,7 +535,7 @@ export default function Leads() {
             if (status.data?.running) {
               toast.success('🚀 Marketing Agent is now running!', { duration: 3000 })
             }
-          } catch (e) {
+          } catch {
             // Silently fail if can't check status
           }
         }, 1000)
@@ -900,10 +886,10 @@ export default function Leads() {
                     selected={selected.has(lead.id)}
                     onSelect={toggleSelect}
                     onStatusChange={handleStatusChange}
-                    onEnrich={handleEnrich}
                     onFindEmail={handleFindEmail}
                     onDelete={handleDelete}
                     onSendToAgent={handleSendToAgent}
+                    agentReachable={agentReachable}
                   />
                 ))}
               </tbody>

@@ -45,7 +45,7 @@ function CampaignCard({ campaign, onDelete }) {
           { label: 'Total', value: campaign.total_leads || 0, color: '#a78bfa', icon: Users },
           { label: 'Contacted', value: campaign.contacted || 0, color: '#22d3ee', icon: TrendingUp },
           { label: 'Converted', value: `${convRate}%`, color: '#4ade80', icon: TrendingUp },
-        ].map(({ label, value, color, icon: Icon }) => (
+        ].map(({ label, value, color }) => (
           <div key={label} style={{
             background: `${color}0d`,
             border: `1px solid ${color}20`,

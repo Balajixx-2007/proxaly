@@ -188,3 +188,19 @@ npm run build
 ## 📄 License
 
 MIT — built with ❤️ using 100% free tools.
+
+---
+
+## Documentation and Legal
+
+- Technical and operational docs: [docs/README.md](docs/README.md)
+- Architecture details: [docs/PROJECT_ARCHITECTURE.md](docs/PROJECT_ARCHITECTURE.md)
+- Product operations guide: [docs/PRODUCT_AND_OPERATIONS_GUIDE.md](docs/PRODUCT_AND_OPERATIONS_GUIDE.md)
+- Legal pack:
+	- [docs/legal/TERMS_OF_SERVICE.md](docs/legal/TERMS_OF_SERVICE.md)
+	- [docs/legal/PRIVACY_POLICY.md](docs/legal/PRIVACY_POLICY.md)
+	- [docs/legal/COOKIE_POLICY.md](docs/legal/COOKIE_POLICY.md)
+	- [docs/legal/DATA_PROCESSING_ADDENDUM.md](docs/legal/DATA_PROCESSING_ADDENDUM.md)
+	- [docs/legal/ACCEPTABLE_USE_POLICY.md](docs/legal/ACCEPTABLE_USE_POLICY.md)
+
+Note: Legal documents include placeholders and should be reviewed by qualified legal counsel before publication.

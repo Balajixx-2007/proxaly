@@ -99,7 +99,7 @@ function LILeadRow({ lead }) {
       const res = await api.get(`/channels/linkedin/message/${lead.id}`)
       setMessage(res.data.message)
       setLinkedinUrl(res.data.linkedinUrl)
-    } catch (err) {
+    } catch {
       toast.error('Failed to generate message')
     }
     setLoading(false)
@@ -113,7 +113,9 @@ function LILeadRow({ lead }) {
     try {
       await api.post(`/channels/linkedin/log/${lead.id}`)
       setLogged(true)
-    } catch { }
+    } catch {
+      // Logging message status is best-effort.
+    }
   }
 
   return (

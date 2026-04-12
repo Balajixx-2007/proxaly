@@ -1,7 +1,7 @@
 /**
  * Analytics Page — Real stats, funnel, trends, weekly report sender
  */
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   BarChart2, TrendingUp, Users, Mail, Calendar,
@@ -135,12 +135,13 @@ export default function Analytics() {
     try {
       const res = await api.get(`/analytics/overview?days=${period}`)
       setData(res.data)
-    } catch (err) {
+    } catch {
       toast.error('Failed to load analytics')
     }
     setLoading(false)
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [period])
 
   const sendReport = async () => {

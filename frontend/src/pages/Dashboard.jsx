@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { leadsApi, campaignsApi } from '../lib/api'
-import { Users, Megaphone, TrendingUp, Zap, Plus, ArrowRight, Target, Activity, Loader2, Play, Square, ExternalLink } from 'lucide-react'
+import { Users, Megaphone, Zap, Plus, ArrowRight, Target, Activity } from 'lucide-react'
 import AutomationCard from './AutomationCard'
 
 function StatCard({ icon: Icon, label, value, sub, color = '#a78bfa', delta }) {
@@ -63,25 +63,10 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ leads: 0, campaigns: 0, contacted: 0, converted: 0 })
   const [recentLeads, setRecentLeads] = useState([])
   const [loading, setLoading] = useState(true)
-  const [agentStatus, setAgentStatus] = useState({ status: 'offline' })
-  const [agentLoading, setAgentLoading] = useState(false)
 
   useEffect(() => {
     loadData()
-    // Poll agent status every 30 seconds
-    const interval = setInterval(loadAgentStatus, 30000)
-    loadAgentStatus() // Poll immediately
-    return () => clearInterval(interval)
   }, [])
-
-  async function loadAgentStatus() {
-    try {
-      const res = await leadsApi.getAgentStatus()
-      setAgentStatus(res.data || { status: 'offline' })
-    } catch (err) {
-      setAgentStatus({ status: 'offline' })
-    }
-  }
 
   async function loadData() {
     setLoading(true)
@@ -101,9 +86,9 @@ export default function Dashboard() {
         contacted: allLeads.filter(l => l.status === 'contacted').length,
         converted: allLeads.filter(l => l.status === 'converted').length,
       })
-    } catch (err) {
+    } catch (loadErr) {
       // Backend might not be running — show zeros gracefully
-      console.warn('Could not load dashboard data:', err.message)
+      console.warn('Could not load dashboard data:', loadErr.message)
     } finally {
       setLoading(false)
     }
