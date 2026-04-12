@@ -120,7 +120,7 @@ function LILeadRow({ lead }) {
     <div style={{ padding: '14px 0', borderBottom: '1px solid rgba(139,92,246,0.06)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: message ? 10 : 0 }}>
         <div style={{ width: 36, height: 36, borderRadius: 9, background: 'rgba(10,102,194,0.12)', border: '1px solid rgba(10,102,194,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <Linkedin size={15} color="#0a66c2" />
+          <BriefcaseBusiness size={15} color="#0a66c2" />
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>{lead.name}</div>
@@ -242,7 +242,7 @@ export default function Channels() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 28 }}>
             <ChannelCard icon={Send} label="Email Outreach" value={stats?.email ?? '—'} color="#22d3ee" sub="Leads contacted by email" active />
             <ChannelCard icon={MessageCircle} label="WhatsApp Sent" value={stats?.whatsapp ?? '—'} color="#25d366" sub="Via Twilio API" active={stats?.whatsapp > 0} />
-            <ChannelCard icon={Linkedin} label="LinkedIn Queue" value={stats?.linkedin ?? '—'} color="#0a66c2" sub="AI messages generated" active={stats?.linkedin > 0} />
+            <ChannelCard icon={BriefcaseBusiness} label="LinkedIn Queue" value={stats?.linkedin ?? '—'} color="#0a66c2" sub="AI messages generated" active={stats?.linkedin > 0} />
           </div>
 
           {/* How it works */}
@@ -350,7 +350,7 @@ export default function Channels() {
               <div style={{ textAlign: 'center', padding: 40, color: 'rgba(148,163,184,0.4)' }}>Loading...</div>
             ) : liQueue.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 40 }}>
-                <Linkedin size={36} color="rgba(10,102,194,0.3)" style={{ marginBottom: 12 }} />
+                <BriefcaseBusiness size={36} color="rgba(10,102,194,0.3)" style={{ marginBottom: 12 }} />
                 <p style={{ color: 'rgba(148,163,184,0.4)', fontSize: 13 }}>No leads in LinkedIn queue.</p>
               </div>
             ) : (

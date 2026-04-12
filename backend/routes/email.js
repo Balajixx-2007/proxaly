@@ -15,6 +15,16 @@ function isValidEmail(email) {
   return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
+function isMissingEmailSchemaError(err) {
+  const msg = String(err?.message || err || '').toLowerCase()
+  return (
+    msg.includes("could not find the table 'public.email_logs'") ||
+    msg.includes("could not find the table 'public.email_sequences'") ||
+    msg.includes('relation "email_logs" does not exist') ||
+    msg.includes('relation "email_sequences" does not exist')
+  )
+}
+
 router.post('/preview', requireAuth, emailLimiter, async (req, res) => {
   const { leadId, stepType = 'initial', painPoint } = req.body
   if (!leadId) return res.status(400).json({ error: 'leadId is required' })
@@ -32,6 +42,9 @@ router.post('/preview', requireAuth, emailLimiter, async (req, res) => {
     const copy = await emailOutreach.generateEmailPreview({ lead, stepType, painPoint })
     res.json({ success: true, leadId, ...copy })
   } catch (err) {
+    if (isMissingEmailSchemaError(err)) {
+      return res.json({ logs: [], warning: 'Email logging tables are not initialized yet.' })
+    }
     res.status(500).json({ error: err.message })
   }
 })

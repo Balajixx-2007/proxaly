@@ -19,7 +19,7 @@ router.get('/overview', requireAuth, async (req, res) => {
     // All leads in period
     const { data: leads, error } = await db
       .from('leads')
-      .select('id, status, ai_score, score, source, niche, created_at, contacted_at, enriched')
+      .select('id, status, ai_score, score, source, business_type, created_at, contacted_at, enriched')
       .gte('created_at', since)
 
     if (error) throw error
@@ -43,7 +43,10 @@ router.get('/overview', requireAuth, async (req, res) => {
 
     // Niche breakdown (top 5)
     const byNiche = {}
-    all.forEach(l => { if (l.niche) byNiche[l.niche] = (byNiche[l.niche] || 0) + 1 })
+    all.forEach(l => {
+      const niche = l.business_type || 'unknown'
+      byNiche[niche] = (byNiche[niche] || 0) + 1
+    })
     const topNiches = Object.entries(byNiche)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)

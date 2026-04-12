@@ -18,6 +18,16 @@ const OPT_OUT_LINE = 'If you\'re not interested, just reply "stop" and I won\'t 
 
 let groqClient = null
 
+function isMissingEmailSchemaError(err) {
+  const msg = String(err?.message || err || '').toLowerCase()
+  return (
+    msg.includes("could not find the table 'public.email_logs'") ||
+    msg.includes("could not find the table 'public.email_sequences'") ||
+    msg.includes('relation "email_logs" does not exist') ||
+    msg.includes('relation "email_sequences" does not exist')
+  )
+}
+
 function getGroqClient() {
   const apiKey = process.env.GROQ_API_KEY
   if (!apiKey) return null
@@ -191,7 +201,10 @@ async function createPendingLogs({ userId, leadId, campaignId = null, sequenceId
   })
 
   const { error } = await supabaseAdmin.from('email_logs').insert(rows)
-  if (error) throw error
+  if (error) {
+    if (isMissingEmailSchemaError(error)) return []
+    throw error
+  }
   return rows
 }
 
@@ -226,7 +239,7 @@ async function sendSingleEmailNow({ userId, lead, campaignId = null, sequenceId 
       scheduled_at: new Date().toISOString(),
     })
 
-  if (error) throw error
+  if (error && !isMissingEmailSchemaError(error)) throw error
 
   return { copy: { ...copy, body: finalBody }, providerMessageId }
 }
@@ -274,7 +287,10 @@ async function processScheduledFollowups(limit = 100) {
     .order('scheduled_at', { ascending: true })
     .limit(limit)
 
-  if (error) throw error
+  if (error) {
+    if (isMissingEmailSchemaError(error)) return { processed: 0, sent: 0, failed: 0, skipped: true }
+    throw error
+  }
   if (!dueLogs || dueLogs.length === 0) return { processed: 0, sent: 0, failed: 0 }
 
   let sent = 0

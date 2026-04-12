@@ -512,10 +512,23 @@ export default function Leads() {
       return toast.error('Select leads first')
     }
 
+    const selectedLeads = leads.filter(l => leadIds.includes(l.id))
+    const emailable = selectedLeads.filter(l => l.email)
+    const skipped = selectedLeads.length - emailable.length
+
+    if (emailable.length === 0) {
+      return toast.error('No selected leads have email addresses')
+    }
+
+    if (skipped > 0) {
+      toast(`Skipping ${skipped} lead(s) without email`, { icon: '⚠️' })
+    }
+
     setSendingToAgent(true)
     try {
-      console.log(`Sending ${leadIds.length} lead(s) to Marketing Agent...`)
-      const res = await leadsApi.sendToAgent(leadIds)
+      const emailableIds = emailable.map(l => l.id)
+      console.log(`Sending ${emailableIds.length} lead(s) to Marketing Agent...`)
+      const res = await leadsApi.sendToAgent(emailableIds)
       const { sent, failed, total } = res.data || {}
 
       if (sent && sent > 0) {
