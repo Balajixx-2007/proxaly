@@ -1,4 +1,4 @@
-﻿// Leads page — search, table, AI enrich, CSV export, status management
+// Leads page — search, table, AI enrich, CSV export, status management
 import { useState, useEffect } from 'react'
 import { leadsApi } from '../lib/api'
 import toast from 'react-hot-toast'
@@ -434,9 +434,10 @@ export default function Leads() {
   const [newLeadIds, setNewLeadIds] = useState(new Set())
   const [activeLead, setActiveLead] = useState(null)
   // Marketing Agent integration
-  const [agentStatus, setAgentStatus] = useState({ status: 'offline', running: false })
+  const [agentStatus, setAgentStatus] = useState({ status: 'stopped', running: false })
   const [sendingToAgent, setSendingToAgent] = useState(false)
-  const agentReachable = agentStatus.status !== 'offline'
+  // Agent is reachable if backend returned a valid response (status is 'stopped' or 'running', not 'offline')
+  const agentReachable = agentStatus.status === 'stopped' || agentStatus.status === 'running' || agentStatus.running === true
 
   useEffect(() => { fetchLeads() }, [])
 

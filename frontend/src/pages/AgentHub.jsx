@@ -72,28 +72,36 @@ function normalizeAgentStatus(payload) {
 }
 
 export default function AgentHub() {
-  const [status, setStatus] = useState({ status: 'offline', running: false, tickCount: 0 })
+  const [status, setStatus] = useState({ status: 'stopped', running: false, tickCount: 0 })
   const [approvals, setApprovals] = useState([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [connectionError, setConnectionError] = useState('')
 
+  const isRunning = (s) => s?.running === true || s?.status === 'running'
+
   const load = async () => {
     setLoading(true)
-    setConnectionError('')
     try {
       const statusRes = await agentApi.status()
-      setStatus(normalizeAgentStatus(statusRes.data))
+      const data = statusRes.data || {}
+      setStatus(data)
+      // Clear error — any valid response means backend is reachable
       setConnectionError('')
     } catch (err) {
-      const msg = err.response?.data?.error || 'Agent unreachable. Check MARKETING_AGENT_URL and the agent service health.'
+      const msg = err.response?.data?.error || 'Cannot reach backend. Check your Railway deployment.'
       setConnectionError(msg)
-      if (err.response?.status !== 503) toast.error(msg)
     }
 
     try {
       const approvalsRes = await agentApi.approvals()
-      setApprovals(Array.isArray(approvalsRes.data?.approvals) ? approvalsRes.data.approvals : Array.isArray(approvalsRes.data) ? approvalsRes.data : [])
+      setApprovals(
+        Array.isArray(approvalsRes.data?.approvals)
+          ? approvalsRes.data.approvals
+          : Array.isArray(approvalsRes.data)
+          ? approvalsRes.data
+          : []
+      )
     } catch {
       setApprovals([])
     }
@@ -108,12 +116,12 @@ export default function AgentHub() {
   const handleStartStop = async () => {
     setBusy(true)
     try {
-      if (status.running) {
+      if (isRunning(status)) {
         await agentApi.stop()
         toast.success('Marketing Agent stopped')
       } else {
         await agentApi.start()
-        toast.success('Marketing Agent started')
+        toast.success('Marketing Agent started!')
       }
       await load()
     } catch (err) {
@@ -187,7 +195,7 @@ export default function AgentHub() {
           </div>
           <div>
             <div style={{ fontSize: 14, color: '#e2e8f0', fontWeight: 700 }}>
-              {connectionError ? 'Marketing Agent Disconnected' : status.running ? 'Marketing Agent Running' : 'Marketing Agent Stopped'}
+              {connectionError ? 'Backend Unreachable' : isRunning(status) ? 'Marketing Agent Running' : 'Marketing Agent Ready'}
             </div>
             <div style={{ fontSize: 12, color: 'rgba(148,163,184,0.55)' }}>
               Ticks: {status.tickCount || 0}
@@ -196,9 +204,9 @@ export default function AgentHub() {
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className={status.running ? 'btn btn-danger' : 'btn btn-primary'} onClick={handleStartStop} disabled={busy}>
-            {status.running ? <Square size={14} /> : <Play size={14} />}
-            {status.running ? 'Stop' : 'Start'}
+          <button className={isRunning(status) ? 'btn btn-danger' : 'btn btn-primary'} onClick={handleStartStop} disabled={busy || !!connectionError}>
+            {isRunning(status) ? <Square size={14} /> : <Play size={14} />}
+            {isRunning(status) ? 'Stop' : 'Start'}
           </button>
           <button className="btn btn-ghost" onClick={load} disabled={busy || loading}>
             <RefreshCw size={14} /> Refresh
