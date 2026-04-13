@@ -14,6 +14,7 @@ const BUSINESS_TYPE_OPTIONS = [
   'digital agency',
   'consultant',
   'web design company',
+  '__custom__',
 ]
 
 function getContactScore(lead) {
@@ -70,24 +71,42 @@ function isContactable(lead) {
 }
 
 function SearchForm({ onResults, loading, setLoading }) {
-  const [businessType, setBusinessType] = useState('marketing agency')
-  const [city, setCity] = useState('')
+  const [businessType, setBusinessType] = useState(localStorage.getItem('proxaly_default_business_type') || 'marketing agency')
+  const [customBusinessType, setCustomBusinessType] = useState('')
+  const [city, setCity] = useState(localStorage.getItem('proxaly_default_city') || '')
   const [source, setSource] = useState('auto')
+  const [progress, setProgress] = useState(0)
+
+  useEffect(() => {
+    if (!loading) {
+      setProgress(0)
+      return undefined
+    }
+
+    setProgress(12)
+    const timer = setInterval(() => {
+      setProgress(current => Math.min(90, current + Math.max(3, Math.round(Math.random() * 11))))
+    }, 220)
+
+    return () => clearInterval(timer)
+  }, [loading])
 
   const handleSearch = async (e) => {
     e.preventDefault()
-    if (!businessType.trim() || !city.trim()) {
+    const resolvedBusinessType = businessType === '__custom__' ? customBusinessType.trim() : businessType.trim()
+
+    if (!resolvedBusinessType || !city.trim()) {
       return toast.error('Enter business type and city')
     }
     setLoading(true)
     try {
-      const res = await leadsApi.scrape({ businessType, city, source })
+      const res = await leadsApi.scrape({ businessType: resolvedBusinessType, city, source })
       const leads = res.data?.leads || []
       const msg = res.data?.message || ''
       // Pass search context so table can filter to this search only
-      onResults(leads, { businessType: businessType.trim(), city: city.trim(), source })
+      onResults(leads, { businessType: resolvedBusinessType, city: city.trim(), source })
       if (leads.length > 0) {
-        toast.success(`Found ${leads.length} leads for "${businessType}" in ${city}!`, { icon: '🎯' })
+        toast.success(`Found ${leads.length} leads for "${resolvedBusinessType}" in ${city}!`, { icon: '🎯' })
       } else {
         toast.error(msg || `No leads found in "${city}". Try a different source or check spelling.`, { duration: 5000 })
       }
@@ -113,9 +132,18 @@ function SearchForm({ onResults, loading, setLoading }) {
           style={{ appearance: 'none' }}
         >
           {BUSINESS_TYPE_OPTIONS.map(type => (
-            <option key={type} value={type}>{type}</option>
+            <option key={type} value={type}>{type === '__custom__' ? 'Custom business type…' : type}</option>
           ))}
         </select>
+        {businessType === '__custom__' && (
+          <input
+            className="input"
+            placeholder="e.g. SaaS consultant, law firm, roofers"
+            value={customBusinessType}
+            onChange={e => setCustomBusinessType(e.target.value)}
+            style={{ marginTop: 8 }}
+          />
+        )}
       </div>
       <div style={{ flex: '1 1 200px' }}>
         <label style={{ display: 'block', fontSize: 12, color: 'rgba(148,163,184,0.6)', marginBottom: 6 }}>
@@ -157,11 +185,19 @@ function SearchForm({ onResults, loading, setLoading }) {
         {loading ? <Loader2 size={16} className="spinner" /> : <Search size={16} />}
         {loading ? 'Finding new leads...' : 'Find Leads'}
       </button>
+      <div style={{ width: '100%', marginTop: 4 }}>
+        <div style={{ height: 4, borderRadius: 999, background: 'rgba(139,92,246,0.1)', overflow: 'hidden' }}>
+          <div style={{ width: `${loading ? progress : 0}%`, height: '100%', background: 'linear-gradient(90deg, #8b5cf6, #22d3ee)', transition: 'width 180ms ease' }} />
+        </div>
+        <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(148,163,184,0.55)' }}>
+          {loading ? 'Searching, filtering, and saving results...' : 'Tip: choose Custom business type for anything outside the preset list.'}
+        </div>
+      </div>
     </form>
   )
 }
 
-function LeadRow({ lead, onStatusChange, onFindEmail, onDelete, selected, onSelect, onSendToAgent, isNew, agentReachable }) {
+function LeadRow({ lead, onStatusChange, onFindEmail, onDelete, selected, onSelect, onSendToAgent, onOpenLead, isNew, agentReachable }) {
   const [findingEmail, setFindingEmail] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const contactScore = getContactScore(lead)
@@ -351,6 +387,13 @@ function LeadRow({ lead, onStatusChange, onFindEmail, onDelete, selected, onSele
               }}>
                 <Send size={12} /> Send to Agent
               </button>
+              <button onClick={() => { onOpenLead(lead); setShowMenu(false) }} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                width: '100%', border: 'none', background: 'transparent', color: '#22d3ee',
+                cursor: 'pointer', fontSize: 12, textAlign: 'left'
+              }}>
+                <Mail size={12} /> View details
+              </button>
               <button onClick={() => { onDelete(lead.id); setShowMenu(false) }} style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
                 width: '100%', border: 'none', background: 'transparent', color: '#f87171',
@@ -378,6 +421,7 @@ export default function Leads() {
   const [bulkEnriching, setBulkEnriching] = useState(false)
   const [onlyContactable, setOnlyContactable] = useState(true)
   const [newLeadIds, setNewLeadIds] = useState(new Set())
+  const [activeLead, setActiveLead] = useState(null)
   // Marketing Agent integration
   const [agentStatus, setAgentStatus] = useState({ status: 'offline' })
   const [sendingToAgent, setSendingToAgent] = useState(false)
@@ -889,6 +933,7 @@ export default function Leads() {
                     onFindEmail={handleFindEmail}
                     onDelete={handleDelete}
                     onSendToAgent={handleSendToAgent}
+                    onOpenLead={setActiveLead}
                     agentReachable={agentReachable}
                   />
                 ))}
@@ -903,6 +948,95 @@ export default function Leads() {
             {selected.size > 0 && <span style={{ color: '#a78bfa' }}>{selected.size} selected</span>}
           </div>
         )}
+      </div>
+
+      {activeLead && (
+        <LeadDetailModal
+          lead={activeLead}
+          onClose={() => setActiveLead(null)}
+          onCopyEmail={async () => {
+            if (activeLead.email) {
+              await navigator.clipboard?.writeText(activeLead.email)
+              toast.success('Email copied')
+            }
+          }}
+          onCopyPhone={async () => {
+            if (activeLead.phone) {
+              await navigator.clipboard?.writeText(activeLead.phone)
+              toast.success('Phone copied')
+            }
+          }}
+          onSendToAgent={async () => handleSendToAgent([activeLead.id])}
+          agentReachable={agentReachable}
+        />
+      )}
+    </div>
+  )
+}
+
+function LeadDetailModal({ lead, onClose, onCopyEmail, onCopyPhone, onSendToAgent, agentReachable }) {
+  const outreachBody = lead.outreach_message || `Hi ${lead.name || 'there'},\n\nI came across your business and thought I should reach out. Let me know if you'd like to chat.`
+  const mailto = lead.email
+    ? `mailto:${lead.email}?subject=${encodeURIComponent(`Helping ${lead.name || 'your team'} get more clients`)}&body=${encodeURIComponent(outreachBody)}`
+    : null
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(2,6,23,0.72)', backdropFilter: 'blur(6px)', display: 'grid', placeItems: 'center', padding: 20 }} onClick={onClose}>
+      <div className="glass" style={{ width: '100%', maxWidth: 760, padding: 24, maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 20 }}>
+          <div>
+            <h2 style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 24 }}>{lead.name}</h2>
+            <div style={{ marginTop: 6, color: 'rgba(148,163,184,0.7)', fontSize: 13 }}>
+              {lead.business_type || 'Unknown business type'} · {lead.city || lead.address || 'No location'}
+            </div>
+          </div>
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 18 }}>
+          <div className="glass" style={{ padding: 14 }}>
+            <div style={{ fontSize: 12, color: 'rgba(148,163,184,0.55)' }}>Email</div>
+            <div style={{ marginTop: 6, color: '#22d3ee' }}>{lead.email || 'No email'}</div>
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-ghost" onClick={onCopyEmail} disabled={!lead.email}>Copy</button>
+              {mailto && <a className="btn btn-primary" href={mailto}>Compose</a>}
+            </div>
+          </div>
+          <div className="glass" style={{ padding: 14 }}>
+            <div style={{ fontSize: 12, color: 'rgba(148,163,184,0.55)' }}>Phone</div>
+            <div style={{ marginTop: 6, color: '#4ade80' }}>{lead.phone || 'No phone'}</div>
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-ghost" onClick={onCopyPhone} disabled={!lead.phone}>Copy</button>
+              {lead.phone && <a className="btn btn-primary" href={`tel:${lead.phone}`}>Call</a>}
+            </div>
+          </div>
+          <div className="glass" style={{ padding: 14 }}>
+            <div style={{ fontSize: 12, color: 'rgba(148,163,184,0.55)' }}>Website</div>
+            <div style={{ marginTop: 6, color: '#a78bfa', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lead.website || 'No website'}</div>
+            <div style={{ marginTop: 10 }}>
+              {lead.website && <a className="btn btn-ghost" href={lead.website} target="_blank" rel="noreferrer">Open site</a>}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: 'rgba(148,163,184,0.55)', marginBottom: 8 }}>Outreach Draft</div>
+          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, background: 'rgba(2,6,23,0.6)', border: '1px solid rgba(139,92,246,0.15)', borderRadius: 10, padding: 14, color: '#cbd5e1' }}>
+            {outreachBody}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12, color: 'rgba(148,163,184,0.55)' }}>
+            Status: <span style={{ color: '#e2e8f0' }}>{lead.status || 'new'}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-ghost" onClick={() => onSendToAgent()} disabled={!agentReachable} title={!agentReachable ? 'Marketing Agent is unreachable' : ''}>
+              Send to Agent
+            </button>
+            <button className="btn btn-primary" onClick={onClose}>Done</button>
+          </div>
+        </div>
       </div>
     </div>
   )

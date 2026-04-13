@@ -7,6 +7,16 @@ const { requireAuth } = require('../middleware/auth')
 const { getClient } = require('../services/supabase')
 const { v4: uuidv4 } = require('uuid')
 
+function isMissingCampaignSchemaError(err) {
+  const message = String(err?.message || err || '').toLowerCase()
+  return (
+    message.includes("could not find the table 'public.campaigns'") ||
+    message.includes("could not find the table 'public.campaign_leads'") ||
+    message.includes('relation "campaigns" does not exist') ||
+    message.includes('relation "campaign_leads" does not exist')
+  )
+}
+
 // ── GET /api/campaigns ────────────────────────────────────────────────────────
 router.get('/', requireAuth, async (req, res) => {
   try {
@@ -142,6 +152,51 @@ router.delete('/:id/leads/:leadId', requireAuth, async (req, res) => {
     if (error) throw error
     res.json({ success: true })
   } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── GET /api/campaigns/:id/leads ────────────────────────────────────────────
+router.get('/:id/leads', requireAuth, async (req, res) => {
+  const { id } = req.params
+
+  try {
+    const db = getClient(req)
+    const { data: links, error } = await db
+      .from('campaign_leads')
+      .select('lead_id, added_at')
+      .eq('campaign_id', id)
+      .order('added_at', { ascending: false })
+
+    if (error) throw error
+
+    const leadIds = (links || []).map(link => link.lead_id).filter(Boolean)
+    if (leadIds.length === 0) {
+      return res.json({ leads: [] })
+    }
+
+    const { data: leads, error: leadsError } = await db
+      .from('leads')
+      .select('id, name, email, phone, website, city, address, business_type, status, ai_score, outreach_message, created_at')
+      .in('id', leadIds)
+
+    if (leadsError) throw leadsError
+
+    const byId = (leads || []).reduce((acc, lead) => {
+      acc[lead.id] = lead
+      return acc
+    }, {})
+
+    return res.json({
+      leads: (links || []).map(link => ({
+        ...byId[link.lead_id],
+        added_at: link.added_at,
+      })).filter(Boolean),
+    })
+  } catch (err) {
+    if (isMissingCampaignSchemaError(err)) {
+      return res.json({ leads: [] })
+    }
     res.status(500).json({ error: err.message })
   }
 })

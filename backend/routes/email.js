@@ -25,6 +25,13 @@ function isMissingEmailSchemaError(err) {
   )
 }
 
+function emptyEmailLogsResponse() {
+  return {
+    logs: [],
+    warning: 'Email logging tables are not initialized yet.',
+  }
+}
+
 router.post('/preview', requireAuth, emailLimiter, async (req, res) => {
   const { leadId, stepType = 'initial', painPoint } = req.body
   if (!leadId) return res.status(400).json({ error: 'leadId is required' })
@@ -43,7 +50,7 @@ router.post('/preview', requireAuth, emailLimiter, async (req, res) => {
     res.json({ success: true, leadId, ...copy })
   } catch (err) {
     if (isMissingEmailSchemaError(err)) {
-      return res.json({ logs: [], warning: 'Email logging tables are not initialized yet.' })
+      return res.status(503).json({ error: 'Email tables are not initialized yet. Run the database migration.' })
     }
     res.status(500).json({ error: err.message })
   }
@@ -91,6 +98,9 @@ router.post('/send', requireAuth, emailLimiter, async (req, res) => {
 
     res.json({ success: true, leadId: lead.id, subject: sent.copy.subject, followupsScheduled: followups.length })
   } catch (err) {
+    if (isMissingEmailSchemaError(err)) {
+      return res.status(503).json({ error: 'Email tables are not initialized yet. Run the database migration.' })
+    }
     res.status(500).json({ error: err.message })
   }
 })
@@ -243,6 +253,9 @@ router.get('/logs', requireAuth, async (req, res) => {
 
     res.json({ logs: decorated })
   } catch (err) {
+    if (isMissingEmailSchemaError(err)) {
+      return res.json(emptyEmailLogsResponse())
+    }
     res.status(500).json({ error: err.message })
   }
 })

@@ -6,7 +6,7 @@
 
 **Current State (Phase 1):**
 ```
-Proxaly Backend (Railway) → HTTP calls → Marketing Agent Service (localhost:3000 or external)
+Proxaly Backend (Railway) → HTTP calls → Marketing Agent Service (your-agent-service.example.com or external)
 ```
 
 **Target State (Phase 2):**

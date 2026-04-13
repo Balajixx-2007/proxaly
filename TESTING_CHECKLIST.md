@@ -84,11 +84,11 @@ npm run dev
 Open browser console (F12) and check:
 - [ ] No CORS errors
 - [ ] No connection refused errors
-- [ ] Proxaly loads at http://localhost:5173
-- [ ] Marketing Agent loads at http://localhost:3000
+- [ ] Proxaly loads at https://your-frontend-domain.example.com
+- [ ] Marketing Agent loads at https://your-agent-service.example.com
 
 ### 3. Test Lead Finding
-1. Open Proxaly: http://localhost:5173
+1. Open Proxaly: https://your-frontend-domain.example.com
 2. Click "Lead Finder"
 3. Search: "dental clinics" in "New York"
 4. Wait for results
@@ -104,7 +104,7 @@ Open browser console (F12) and check:
    - [ ] Agent status changes to green "Agent Running (X ticks)"
 
 ### 5. Verify in Marketing Agent
-1. Open http://localhost:3000
+1. Open https://your-agent-service.example.com
 2. Go to "Leads" page
 3. Verify 3 new leads appear with:
    - [ ] Name filled
@@ -125,7 +125,7 @@ Open browser console (F12) and check:
 4. Verify agent status indicator updates with new tick count
 
 ### 7. Test Dashboard Widget
-1. Go to Proxaly dashboard: http://localhost:5173/
+1. Go to Proxaly dashboard: https://your-frontend-domain.example.com/
 2. Check right sidebar
 3. Verify "Marketing Agent" card shows:
    - [ ] Agent status (green/red dot)
@@ -200,7 +200,7 @@ cd "e:\ai marketing agent" && npm list | grep cors
 # Verify environment variables
 cd "E:\ai leads\backend"
 node -e "console.log(process.env.MARKETING_AGENT_URL)"
-# Should output: http://localhost:3000
+# Should output: https://your-agent-service.example.com
 ```
 
 ---

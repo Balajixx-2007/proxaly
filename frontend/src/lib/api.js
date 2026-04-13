@@ -58,6 +58,7 @@ export const campaignsApi = {
   delete: (id) => api.delete(`/campaigns/${id}`),
   addLead: (campaignId, leadId) => api.post(`/campaigns/${campaignId}/leads`, { leadId }),
   removeLead: (campaignId, leadId) => api.delete(`/campaigns/${campaignId}/leads/${leadId}`),
+  leads: (campaignId) => api.get(`/campaigns/${campaignId}/leads`),
 }
 
 // ----- Email Outreach -----

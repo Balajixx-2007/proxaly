@@ -34,7 +34,7 @@ You have a **single strategic goal**: Merge the Marketing Agent into the Proxaly
 │  Blockers: ⚠️ Environment config                                  │
 │  Effort: ~30 min (just env config + redeploy)                    │
 │  Outcome: Users see Agent Hub in sidebar, can manage agent from   │
-│           Proxaly without switching to localhost:3000             │
+│           Proxaly without switching to your-agent-service.example.com             │
 │  Success: Agent Hub loads, send-to-agent works, approvals queue   │
 └────────────────────────────────────────────────────────────────────┘
         ↓
@@ -133,7 +133,7 @@ Files Changed:
               ↓ HTTP via MARKETING_AGENT_URL
 ┌─────────────────────────────────┐
 │   Marketing Agent Service       │
-│   (External or localhost)       │
+│   (External service endpoint)    │
 │                                 │
 │   Lead queueing, approvals,     │
 │   email sending, reply detection│
@@ -304,7 +304,7 @@ You now have an Agent control panel directly in Proxaly!
 
 OLD WAY:
 - Use Proxaly to send leads to marketing agent
-- Switch to http://localhost:3000 to manage agent and approvals
+- Switch to https://your-agent-service.example.com to manage agent and approvals
 - Two separate tabs, two separate UIs
 
 NEW WAY:

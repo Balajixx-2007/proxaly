@@ -24,8 +24,9 @@ export default function EmailCampaign() {
   const [sending, setSending] = useState(false)
   const [scheduling, setScheduling] = useState(false)
   const [previewing, setPreviewing] = useState(false)
-  const [painPoint, setPainPoint] = useState('inconsistent lead flow')
+  const [painPoint, setPainPoint] = useState(localStorage.getItem('proxaly_default_pain_point') || 'inconsistent lead flow')
   const [preview, setPreview] = useState(null)
+  const [logsWarning, setLogsWarning] = useState('')
 
   const selectedIds = useMemo(() => [...selected], [selected])
 
@@ -47,6 +48,7 @@ export default function EmailCampaign() {
     try {
       const res = await emailApi.logs({ limit: 50 })
       setLogs(res.data?.logs || [])
+      setLogsWarning(res.data?.warning || '')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to load email logs')
     } finally {
@@ -245,6 +247,11 @@ export default function EmailCampaign() {
           <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(139,92,246,0.15)', fontSize: 13, color: 'rgba(148,163,184,0.75)' }}>
             Recent email logs
           </div>
+          {logsWarning && (
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid rgba(34,211,238,0.12)', background: 'rgba(34,211,238,0.05)', color: '#22d3ee', fontSize: 12 }}>
+              {logsWarning}
+            </div>
+          )}
           <div style={{ maxHeight: 420, overflow: 'auto', padding: 12 }}>
             {loadingLogs ? (
               <div style={{ padding: 12, color: 'rgba(148,163,184,0.7)' }}>Loading...</div>

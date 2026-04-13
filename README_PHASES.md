@@ -367,7 +367,7 @@ PHASE 3: Production-Grade Service
 
 **Phase 1:**
 - [ ] Read through PHASE_1_DEPLOYMENT.md
-- [ ] Identify agent service URL (production or localhost)
+- [ ] Identify agent service URL (production or staging)
 - [ ] Run `node backend/scripts/phase1-deploy.js`
 - [ ] Test in production
 - [ ] Monitor for 24 hours

@@ -18,6 +18,15 @@ function getSupabase() {
   )
 }
 
+function isMissingClientsSchemaError(err) {
+  const message = String(err?.message || err || '').toLowerCase()
+  return (
+    message.includes("could not find the table 'public.clients'") ||
+    message.includes('relation "clients" does not exist') ||
+    message.includes('relation "branding_settings" does not exist')
+  )
+}
+
 // ── List all clients for the authenticated user ─────────────────────────────
 router.get('/', requireAuth, async (req, res) => {
   try {
@@ -33,6 +42,9 @@ router.get('/', requireAuth, async (req, res) => {
     if (error) throw error
     res.json(data || [])
   } catch (err) {
+    if (isMissingClientsSchemaError(err)) {
+      return res.json([])
+    }
     res.status(500).json({ error: err.message })
   }
 })
@@ -73,6 +85,9 @@ router.post('/', requireAuth, async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'https://proxaly.vercel.app'
     res.json({ ...data, portalUrl: `${frontendUrl}/client/${token}` })
   } catch (err) {
+    if (isMissingClientsSchemaError(err)) {
+      return res.status(503).json({ error: 'Clients table is not initialized yet. Run the database migration.' })
+    }
     res.status(500).json({ error: err.message })
   }
 })
@@ -94,6 +109,9 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (error) throw error
     res.json(data)
   } catch (err) {
+    if (isMissingClientsSchemaError(err)) {
+      return res.status(503).json({ error: 'Clients table is not initialized yet. Run the database migration.' })
+    }
     res.status(500).json({ error: err.message })
   }
 })
@@ -113,6 +131,9 @@ router.delete('/:id', requireAuth, async (req, res) => {
     if (error) throw error
     res.json({ success: true })
   } catch (err) {
+    if (isMissingClientsSchemaError(err)) {
+      return res.status(503).json({ error: 'Clients table is not initialized yet. Run the database migration.' })
+    }
     res.status(500).json({ error: err.message })
   }
 })
@@ -138,6 +159,9 @@ router.post('/:id/regenerate-token', requireAuth, async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'https://proxaly.vercel.app'
     res.json({ token: newToken, portalUrl: `${frontendUrl}/client/${newToken}` })
   } catch (err) {
+    if (isMissingClientsSchemaError(err)) {
+      return res.status(503).json({ error: 'Clients table is not initialized yet. Run the database migration.' })
+    }
     res.status(500).json({ error: err.message })
   }
 })

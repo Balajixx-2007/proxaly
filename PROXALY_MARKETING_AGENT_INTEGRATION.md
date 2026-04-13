@@ -26,18 +26,18 @@ This document outlines the complete integration between **Proxaly** (AI Lead Gen
     observation: lead.ai_summary || lead.outreach_message || lead.notes
   }
   ```
-- Sends each lead to `POST http://localhost:3000/api/leads`
-- Automatically starts Marketing Agent via `POST http://localhost:3000/api/agent/start`
+- Sends each lead to `POST https://your-agent-service.example.com/api/leads`
+- Automatically starts Marketing Agent via `POST https://your-agent-service.example.com/api/agent/start`
 - Returns: `{ success, sent, failed, total, message }`
 - Gracefully handles failures (continues with remaining leads if one fails)
 
 **GET /api/agent/status**
-- Proxies Marketing Agent status from `http://localhost:3000/api/agent/status`
+- Proxies Marketing Agent status from `https://your-agent-service.example.com/api/agent/status`
 - Returns: Agent running status, tick count, last run time, emails sent today
 - Returns 503 if Marketing Agent is unreachable
 
 #### Environment Variables Added:
-- `MARKETING_AGENT_URL=http://localhost:3000` (added to `.env` and `.env.example`)
+- `MARKETING_AGENT_URL=https://your-agent-service.example.com` (added to `.env` and `.env.example`)
 - Use for easy deployment config changes
 
 ### 2. **Frontend Integration (Proxaly)**
@@ -80,7 +80,7 @@ This document outlines the complete integration between **Proxaly** (AI Lead Gen
   - Current status text
   - 📧 Emails sent today
   - Last run time
-  - "Open Dashboard" button → `http://localhost:3000`
+  - "Open Dashboard" button → `https://your-agent-service.example.com`
 - Polling: Updates agent status every 30 seconds
 - Card styling: Gradient background matching Proxaly theme
 
@@ -92,9 +92,9 @@ const cors = require('cors');
 
 app.use(cors({
   origin: [
-    'http://localhost:5173',  // Proxaly frontend
-    'http://localhost:3001',  // Proxaly backend
-    'http://localhost:3000',  // Marketing Agent itself
+    'https://your-frontend-domain.example.com',  // Proxaly frontend
+    'https://your-backend-domain.example.com',  // Proxaly backend
+    'https://your-agent-service.example.com',  // Marketing Agent itself
     'https://proxaly.app',    // Production domain
     /\.proxaly\.app$/,        // Subdomains
   ],
@@ -114,7 +114,7 @@ app.use(cors({
 
 ### Step 1: Search Leads in Proxaly
 ```
-1. Open Proxaly at http://localhost:5173
+1. Open Proxaly at https://your-frontend-domain.example.com
 2. Click "Lead Finder"
 3. Enter business type: "dental clinics"
 4. Enter city: "New York"
@@ -145,13 +145,13 @@ app.use(cors({
 ```
 1. Agent status indicator in Leads page toolbar updates
 2. Marketing Agent card on Dashboard shows real-time metrics
-3. Check Marketing Agent dashboard at http://localhost:3000 for detailed logs
+3. Check Marketing Agent dashboard at https://your-agent-service.example.com for detailed logs
 4. Monitor email sending in agent logs
 ```
 
 ### Step 5: Verify in Marketing Agent
 ```
-1. Open http://localhost:3000
+1. Open https://your-agent-service.example.com
 2. Go to Leads page
 3. See 5 new leads with following data:
    - Name: ✅
@@ -305,7 +305,7 @@ Response:
 
 ### Proxaly Backend (.env)
 ```
-MARKETING_AGENT_URL=http://localhost:3000
+MARKETING_AGENT_URL=https://your-agent-service.example.com
 # For production:
 # MARKETING_AGENT_URL=https://agent.yourdomain.com
 ```
@@ -314,8 +314,8 @@ MARKETING_AGENT_URL=http://localhost:3000
 CORS origins can be modified to allow additional domains:
 ```javascript
 origin: [
-  'http://localhost:5173',
-  'http://localhost:3001',
+  'https://your-frontend-domain.example.com',
+  'https://your-backend-domain.example.com',
   'https://yourdomain.com',
   // Add more as needed
 ]
@@ -327,7 +327,7 @@ origin: [
 
 Setup is complete when all pass:
 
-- [ ] Proxaly backend has `.env` with `MARKETING_AGENT_URL=http://localhost:3000`
+- [ ] Proxaly backend has `.env` with `MARKETING_AGENT_URL=https://your-agent-service.example.com`
 - [ ] Proxaly backend `/api/leads/send-to-agent` endpoint returns 200
 - [ ] Proxaly backend `/api/leads/agent/status` endpoint returns 200
 - [ ] Proxaly frontend loads Leads page without errors
@@ -446,7 +446,7 @@ Potential additions to this integration:
 Your Proxaly + Marketing Agent integration is now complete! 
 
 Start by:
-1. Opening Proxaly at http://localhost:5173
+1. Opening Proxaly at https://your-frontend-domain.example.com
 2. Searching for leads
 3. Selecting leads with high scores
 4. Clicking the purple "Send to Agent" button

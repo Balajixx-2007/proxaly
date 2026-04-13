@@ -9,6 +9,40 @@ const { requireAuth } = require('../middleware/auth')
 const { getClient } = require('../services/supabase')
 const { LEAD_STATUS, statusIn, normalizeLeadStatus, getLeadScore } = require('../utils/leadSchema')
 
+function isMissingAnalyticsSchemaError(err) {
+  const message = String(err?.message || err || '').toLowerCase()
+  return (
+    message.includes("could not find the table 'public.leads'") ||
+    message.includes("could not find the table 'public.campaigns'") ||
+    message.includes('relation "leads" does not exist') ||
+    message.includes('relation "campaigns" does not exist')
+  )
+}
+
+function emptyOverviewResponse(days) {
+  const windowDays = Number(days) || 30
+  return {
+    period: { days: windowDays, since: new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString() },
+    totals: {
+      allTime: 0,
+      thisperiod: 0,
+      enriched: 0,
+      contacted: 0,
+      replied: 0,
+      meetingsBooked: 0,
+      clients: 0,
+    },
+    rates: { replyRate: 0, meetingRate: 0, enrichRate: 0 },
+    avgScore: 0,
+    funnel: { scraped: 0, enriched: 0, contacted: 0, replied: 0, meetings: 0, clients: 0 },
+    byStatus: {},
+    bySource: {},
+    topNiches: [],
+    scoreDistribution: { low: 0, medium: 0, high: 0 },
+    dailyData: [],
+  }
+}
+
 // ── GET /api/analytics/overview ─────────────────────────────────────────────
 router.get('/overview', requireAuth, async (req, res) => {
   try {
@@ -111,6 +145,9 @@ router.get('/overview', requireAuth, async (req, res) => {
     })
   } catch (err) {
     console.error('Analytics error:', err.message)
+    if (isMissingAnalyticsSchemaError(err)) {
+      return res.json(emptyOverviewResponse(req.query.days))
+    }
     res.status(500).json({ error: err.message })
   }
 })
@@ -128,6 +165,9 @@ router.get('/campaigns', requireAuth, async (req, res) => {
     if (error) throw error
     res.json(campaigns || [])
   } catch (err) {
+    if (isMissingAnalyticsSchemaError(err)) {
+      return res.json([])
+    }
     res.status(500).json({ error: err.message })
   }
 })

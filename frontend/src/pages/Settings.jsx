@@ -1,8 +1,9 @@
 // Settings page
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import { User, Key, Bell, Shield, Save, RefreshCw } from 'lucide-react'
+import { API_BASE_URL, APP_ORIGIN } from '../lib/api'
 
 function Section({ title, children }) {
   return (
@@ -16,6 +17,12 @@ function Section({ title, children }) {
 export default function Settings() {
   const { user } = useAuth()
   const [groqKey, setGroqKey] = useState(localStorage.getItem('groq_key') || '')
+  const [workspaceDefaults, setWorkspaceDefaults] = useState(() => ({
+    businessType: localStorage.getItem('proxaly_default_business_type') || 'marketing agency',
+    city: localStorage.getItem('proxaly_default_city') || '',
+    painPoint: localStorage.getItem('proxaly_default_pain_point') || 'inconsistent lead flow',
+    reportEmail: localStorage.getItem('proxaly_report_email') || user?.email || '',
+  }))
   const [notifications, setNotifications] = useState({
     newLeads: true,
     enrichment: true,
@@ -31,6 +38,21 @@ export default function Settings() {
       toast('Groq key cleared', { icon: '🗑️' })
     }
   }
+
+  const saveWorkspaceDefaults = () => {
+    localStorage.setItem('proxaly_default_business_type', workspaceDefaults.businessType)
+    localStorage.setItem('proxaly_default_city', workspaceDefaults.city)
+    localStorage.setItem('proxaly_default_pain_point', workspaceDefaults.painPoint)
+    localStorage.setItem('proxaly_report_email', workspaceDefaults.reportEmail)
+    toast.success('Workspace defaults saved')
+  }
+
+  const integrationState = useMemo(() => ([
+    { label: 'Backend API', value: API_BASE_URL, ok: true },
+    { label: 'App Origin', value: APP_ORIGIN, ok: true },
+    { label: 'Groq key', value: groqKey ? 'Saved locally' : 'Not set', ok: Boolean(groqKey) },
+    { label: 'Report email', value: workspaceDefaults.reportEmail || 'Not set', ok: Boolean(workspaceDefaults.reportEmail) },
+  ]), [groqKey, workspaceDefaults.reportEmail])
 
   return (
     <div className="fade-in">
@@ -58,6 +80,36 @@ export default function Settings() {
             <p style={{ fontSize: 12, color: 'rgba(34,211,238,0.7)', margin: 0 }}>
               ✓ Account verified · Free plan · 50 leads/month
             </p>
+          </div>
+        </Section>
+
+        {/* Workspace Defaults */}
+        <Section title="🧭 Workspace Defaults">
+          <p style={{ fontSize: 13, color: 'rgba(148,163,184,0.5)', margin: '0 0 16px' }}>
+            These defaults are reused by Leads and Email Campaign so you do not re-enter the same context every time.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, color: 'rgba(148,163,184,0.7)', marginBottom: 6 }}>Default Business Type</label>
+              <input className="input" value={workspaceDefaults.businessType} onChange={e => setWorkspaceDefaults(prev => ({ ...prev, businessType: e.target.value }))} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, color: 'rgba(148,163,184,0.7)', marginBottom: 6 }}>Default City</label>
+              <input className="input" value={workspaceDefaults.city} onChange={e => setWorkspaceDefaults(prev => ({ ...prev, city: e.target.value }))} placeholder="e.g. Chennai" />
+            </div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label style={{ display: 'block', fontSize: 13, color: 'rgba(148,163,184,0.7)', marginBottom: 6 }}>Default Pain Point</label>
+            <input className="input" value={workspaceDefaults.painPoint} onChange={e => setWorkspaceDefaults(prev => ({ ...prev, painPoint: e.target.value }))} placeholder="e.g. inconsistent lead flow" />
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label style={{ display: 'block', fontSize: 13, color: 'rgba(148,163,184,0.7)', marginBottom: 6 }}>Report Email</label>
+            <input className="input" type="email" value={workspaceDefaults.reportEmail} onChange={e => setWorkspaceDefaults(prev => ({ ...prev, reportEmail: e.target.value }))} placeholder="your@email.com" />
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <button className="btn btn-primary" onClick={saveWorkspaceDefaults}>
+              <Save size={14} /> Save Workspace Defaults
+            </button>
           </div>
         </Section>
 
@@ -91,6 +143,20 @@ export default function Settings() {
             <p style={{ fontSize: 12, color: 'rgba(139,92,246,0.7)', margin: 0 }}>
               💡 Groq is 100% free — 14,400 requests/day with llama3-8b-8192
             </p>
+          </div>
+        </Section>
+
+        {/* Integration Status */}
+        <Section title="🔌 Integration Status">
+          <div style={{ display: 'grid', gap: 10 }}>
+            {integrationState.map(item => (
+              <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(139,92,246,0.1)', background: 'rgba(13,18,48,0.45)' }}>
+                <div style={{ fontSize: 13, color: 'rgba(226,232,240,0.85)' }}>{item.label}</div>
+                <div style={{ fontSize: 12, color: item.ok ? '#4ade80' : 'rgba(148,163,184,0.55)', textAlign: 'right', wordBreak: 'break-word' }}>
+                  {item.value}
+                </div>
+              </div>
+            ))}
           </div>
         </Section>
 

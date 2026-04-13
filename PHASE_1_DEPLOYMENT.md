@@ -22,7 +22,7 @@ The backend needs to know where the Marketing Agent service is running in produc
 
 ### Current State
 - ❌ **NOT SET** in Railway production backend
-- ⚠️ Falls back to `http://localhost:3000` (unreachable from Railway container)
+- ⚠️ Falls back to `https://your-agent-service.example.com` (unreachable from Railway container)
 - 🔴 **This is why send-to-agent was failing**
 
 ### Required Action
@@ -34,9 +34,9 @@ MARKETING_AGENT_URL=https://your-agent-domain.com
 ```
 Example: `https://agent.example.com` or `https://proxaly-agent.up.railway.app`
 
-**Option B: Marketing Agent Still on Localhost (Development)**
+**Option B: Marketing Agent on a Separate Dev/Staging Host**
 ```
-MARKETING_AGENT_URL=http://localhost:3000
+MARKETING_AGENT_URL=https://your-agent-service.example.com
 ```
 This won't work in production! Agent service must be reachable from Railway.
 

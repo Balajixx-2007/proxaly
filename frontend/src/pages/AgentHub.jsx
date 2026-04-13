@@ -64,9 +64,11 @@ export default function AgentHub() {
   const [approvals, setApprovals] = useState([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [connectionError, setConnectionError] = useState('')
 
   const load = async () => {
     setLoading(true)
+    setConnectionError('')
     try {
       const [statusRes, approvalsRes] = await Promise.all([
         agentApi.status(),
@@ -76,6 +78,7 @@ export default function AgentHub() {
       setStatus(statusRes.data || { running: false, tickCount: 0 })
       setApprovals(Array.isArray(approvalsRes.data) ? approvalsRes.data : [])
     } catch (err) {
+      setConnectionError(err.response?.data?.error || 'Could not load Agent Hub')
       toast.error(err.response?.data?.error || 'Could not load Agent Hub')
     } finally {
       setLoading(false)
@@ -168,7 +171,7 @@ export default function AgentHub() {
           </div>
           <div>
             <div style={{ fontSize: 14, color: '#e2e8f0', fontWeight: 700 }}>
-              {status.running ? 'Marketing Agent Running' : 'Marketing Agent Stopped'}
+              {connectionError ? 'Marketing Agent Disconnected' : status.running ? 'Marketing Agent Running' : 'Marketing Agent Stopped'}
             </div>
             <div style={{ fontSize: 12, color: 'rgba(148,163,184,0.55)' }}>
               Ticks: {status.tickCount || 0}
@@ -190,6 +193,20 @@ export default function AgentHub() {
       <div style={{ marginBottom: 10, fontSize: 13, color: 'rgba(148,163,184,0.7)' }}>
         Pending approvals: <strong style={{ color: '#a78bfa' }}>{approvals.length}</strong>
       </div>
+
+      {connectionError && (
+        <div style={{
+          background: 'rgba(239,68,68,0.08)',
+          border: '1px solid rgba(239,68,68,0.18)',
+          borderRadius: 12,
+          padding: 14,
+          marginBottom: 16,
+          color: '#fca5a5',
+          fontSize: 13,
+        }}>
+          {connectionError}. Check <code>MARKETING_AGENT_URL</code> and the agent service health.
+        </div>
+      )}
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 50, color: 'rgba(148,163,184,0.5)' }}>Loading Agent Hub...</div>

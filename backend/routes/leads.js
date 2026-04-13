@@ -486,14 +486,22 @@ router.post('/send-to-agent', requireAuth, async (req, res) => {
       }
     }
 
-    res.json({
-      success: true,
+    const responseBody = {
+      success: sent > 0,
       sent,
       failed,
       total: leads.length,
       errors: errors.length > 0 ? errors : undefined,
-      message: `Sent ${sent}/${leads.length} leads to Marketing Agent`
-    })
+      message: sent > 0
+        ? `Sent ${sent}/${leads.length} leads to Marketing Agent`
+        : 'No leads could be queued for Marketing Agent',
+    }
+
+    if (sent === 0) {
+      return res.status(503).json(responseBody)
+    }
+
+    res.json(responseBody)
 
   } catch (err) {
     console.error('Send to agent error:', err.message)
