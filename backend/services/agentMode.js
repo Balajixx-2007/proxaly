@@ -1,17 +1,27 @@
 const axios = require('axios')
 
 function isExternalAgentMode() {
-  return process.env.USE_EXTERNAL_AGENT === 'true'
+  return process.env.USE_EXTERNAL_AGENT === 'true' && !!getMarketingAgentUrl()
+}
+
+function loadInProcessAgent() {
+  try {
+    return require('../agent')
+  } catch (phase2Err) {
+    try {
+      return require('../services/agentService')
+    } catch (phase2ServiceErr) {
+      console.error('[AgentMode] Failed to load in-process agent implementations')
+      console.error(phase2Err)
+      console.error(phase2ServiceErr)
+      return null
+    }
+  }
 }
 
 function getInProcessAgent() {
   if (isExternalAgentMode()) return null
-
-  try {
-    return require('../agent')
-  } catch (_) {
-    return null
-  }
+  return loadInProcessAgent()
 }
 
 function getMarketingAgentUrl() {
