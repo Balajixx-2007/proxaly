@@ -59,6 +59,7 @@ export const campaignsApi = {
   addLead: (campaignId, leadId) => api.post(`/campaigns/${campaignId}/leads`, { leadId }),
   removeLead: (campaignId, leadId) => api.delete(`/campaigns/${campaignId}/leads/${leadId}`),
   leads: (campaignId) => api.get(`/campaigns/${campaignId}/leads`),
+  campaignLeads: (campaignId) => api.get(`/campaigns/${campaignId}/leads`), // alias
 }
 
 // ----- Email Outreach -----

@@ -70,19 +70,23 @@ export default function AgentHub() {
     setLoading(true)
     setConnectionError('')
     try {
-      const [statusRes, approvalsRes] = await Promise.all([
-        agentApi.status(),
-        agentApi.approvals(),
-      ])
-
+      const statusRes = await agentApi.status()
       setStatus(statusRes.data || { running: false, tickCount: 0 })
-      setApprovals(Array.isArray(approvalsRes.data) ? approvalsRes.data : [])
+      setConnectionError('')
     } catch (err) {
-      setConnectionError(err.response?.data?.error || 'Could not load Agent Hub')
-      toast.error(err.response?.data?.error || 'Could not load Agent Hub')
-    } finally {
-      setLoading(false)
+      const msg = err.response?.data?.error || 'Agent unreachable. Check MARKETING_AGENT_URL and the agent service health.'
+      setConnectionError(msg)
+      if (err.response?.status !== 503) toast.error(msg)
     }
+
+    try {
+      const approvalsRes = await agentApi.approvals()
+      setApprovals(Array.isArray(approvalsRes.data?.approvals) ? approvalsRes.data.approvals : Array.isArray(approvalsRes.data) ? approvalsRes.data : [])
+    } catch {
+      setApprovals([])
+    }
+
+    setLoading(false)
   }
 
   useEffect(() => {

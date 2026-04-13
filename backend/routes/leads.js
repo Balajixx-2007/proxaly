@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Leads routes
  * Uses user-scoped Supabase client (JWT passthrough) → works with anon key + RLS
  */
@@ -14,12 +14,8 @@ const { v4: uuidv4 } = require('uuid')
 const { normalizeLeadStatus } = require('../utils/leadSchema')
 const { getInProcessAgent, callExternalAgent } = require('../services/agentMode')
 
-const ALLOWED_BUSINESS_TYPES = new Set([
-  'marketing agency',
-  'digital agency',
-  'consultant',
-  'web design company',
-])
+// All business types are allowed — users can search for any niche
+// Previously had a whitelist here that blocked custom types. Removed.
 
 const scrapeLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -92,12 +88,8 @@ router.post('/scrape', requireAuth, scrapeLimiter, async (req, res) => {
     return res.status(400).json({ error: 'businessType and city are required' })
   }
 
+
   const normalizedBusinessType = businessType.trim().toLowerCase()
-  if (!ALLOWED_BUSINESS_TYPES.has(normalizedBusinessType)) {
-    return res.status(400).json({
-      error: 'Unsupported business type. Use one of: marketing agency, digital agency, consultant, web design company.',
-    })
-  }
 
   try {
     const rawLeads = await scrapeLeads({

@@ -151,13 +151,13 @@ function CreateModal({ onClose, onCreate }) {
   )
 }
 
-function ManageModal({ campaign, onClose, onChanged }) {
+function ManageModal({ campaign, onClose, onChanged, initialMode = 'leads' }) {
   const [loading, setLoading] = useState(true)
   const [assigned, setAssigned] = useState([])
   const [allLeads, setAllLeads] = useState([])
   const [query, setQuery] = useState('')
   const [busyId, setBusyId] = useState(null)
-  const [mode, setMode] = useState('leads')
+  const [mode, setMode] = useState(initialMode)
 
   useEffect(() => {
     let mounted = true

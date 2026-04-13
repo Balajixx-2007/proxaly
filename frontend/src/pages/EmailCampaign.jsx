@@ -50,7 +50,16 @@ export default function EmailCampaign() {
       setLogs(res.data?.logs || [])
       setLogsWarning(res.data?.warning || '')
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to load email logs')
+      const status = err.response?.status
+      const msg = err.response?.data?.error || ''
+      if (status === 503 || msg.includes('not initialized')) {
+        // Tables not set up yet — show empty logs with setup note
+        setLogs([])
+        setLogsWarning('Email tracking tables not set up yet. Run the database migration in Supabase.')
+      } else {
+        // Silent fail — don't block the page
+        setLogs([])
+      }
     } finally {
       setLoadingLogs(false)
     }

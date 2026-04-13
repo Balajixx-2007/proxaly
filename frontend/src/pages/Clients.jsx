@@ -191,8 +191,15 @@ export default function Clients() {
     try {
       const res = await api.get('/clients')
       setClients(res.data || [])
-    } catch {
-      toast.error('Failed to load clients')
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message || ''
+      if (msg.includes('not initialized') || err.response?.status === 503) {
+        // Tables not set up yet — show empty state, not an error
+        setClients([])
+      } else {
+        toast.error('Failed to load clients')
+        setClients([])
+      }
     }
     setLoading(false)
   }

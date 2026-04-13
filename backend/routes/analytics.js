@@ -144,11 +144,9 @@ router.get('/overview', requireAuth, async (req, res) => {
       dailyData,
     })
   } catch (err) {
-    console.error('Analytics error:', err.message)
-    if (isMissingAnalyticsSchemaError(err)) {
-      return res.json(emptyOverviewResponse(req.query.days))
-    }
-    res.status(500).json({ error: err.message })
+    console.error('Analytics overview error:', err.message)
+    // Always return empty data (never 500) so Analytics page renders
+    return res.json(emptyOverviewResponse(req.query.days))
   }
 })
 
