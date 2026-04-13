@@ -39,11 +39,12 @@ const BLOCKED_WEBSITE_HOSTS = [
   'yelp.com',
 ]
 
-const QUERY_KEYWORDS = [
-  'marketing agency',
-  'digital marketing agency',
-  'seo agency',
-  'growth agency',
+// Keywords that indicate a generic marketing/agency business —
+// used to detect and filter out wrong scraper results
+const AGENCY_MISMATCH_KEYWORDS = [
+  'marketing agency', 'seo agency', 'digital agency', 'creative agency',
+  'advertising agency', 'production studio', 'growth agency', 'pr agency',
+  'media agency', 'social media agency', 'branding agency'
 ]
 
 async function launchBrowser() {
@@ -849,9 +850,34 @@ async function enrichLeadContacts(leads) {
   return enriched
 }
 
-function pickSearchKeyword(businessType) {
-  const pool = [...new Set([businessType, ...QUERY_KEYWORDS])]
-  return pool[Math.floor(Math.random() * pool.length)]
+/**
+ * Validate that a scraped lead is relevant to the searched business type.
+ * Catches the case where Google Maps returns marketing agencies for "dentist" searches.
+ */
+function isRelevantToSearch(lead, searchedType) {
+  const type = (searchedType || '').toLowerCase().trim()
+  const name = (lead.name || '').toLowerCase()
+
+  // Split search type into keywords (e.g. 'dental clinic' -> ['dental', 'clinic'])
+  const typeWords = type.split(/\s+/).filter(w => w.length > 3)
+
+  // If search contains any of these, it's an agency search — any agency result is fine
+  const isAgencySearch = AGENCY_MISMATCH_KEYWORDS.some(kw => type.includes(kw.split(' ')[0]))
+  if (isAgencySearch) return true
+
+  // For non-agency searches, filter out obvious agency/studio results
+  const agencyTerms = ['agency', 'marketing', 'studio', 'creative', 'roi', 'seo', 'branding', 'media', 'advertising', 'production']
+  const hasAgencyName = agencyTerms.some(term => name.includes(term))
+  if (hasAgencyName && !isAgencySearch) {
+    // Double check: does the searched type itself include any agency terms?
+    const typeIncludesAgency = agencyTerms.some(term => type.includes(term))
+    if (!typeIncludesAgency) {
+      console.log(`[Filter] Removing mismatched result: "${lead.name}" (searching for "${searchedType}")`)
+      return false
+    }
+  }
+
+  return true
 }
 
 function dedupeLeads(leads) {
@@ -874,7 +900,9 @@ function dedupeLeads(leads) {
  * Falls back automatically if primary source returns 0 leads
  */
 async function scrapeLeads({ businessType, city, source = 'auto', maxResults = 15 }) {
-  const keyword = pickSearchKeyword(businessType)
+  // IMPORTANT: Always use the exact businessType the user searched for.
+  // Never replace it with marketing keywords.
+  const keyword = businessType
   console.log(`\n🔍 Scraping: "${keyword}" in "${city}" [source: ${source}]`)
 
   const indian = isIndianCity(city)
@@ -905,7 +933,7 @@ async function scrapeLeads({ businessType, city, source = 'auto', maxResults = 1
       leads = await scrapeGoogleMaps(keyword, city, maxResults + 8)
   }
 
-  // Fallback chain: if primary gave 0 results
+  // Fallback chain: if primary gave 0 relevant results
   if (leads.length === 0) {
     console.log(`⚠️  Primary source (${primarySource}) returned 0 leads. Trying fallback...`)
 
@@ -927,9 +955,14 @@ async function scrapeLeads({ businessType, city, source = 'auto', maxResults = 1
   const deduped = dedupeLeads(shuffled)
   const contactEnriched = await enrichLeadContacts(deduped)
   const contactable = contactEnriched.filter(isContactableLead)
-  const fresh = shuffleArray(contactable).slice(0, maxResults)
 
-  console.log(`\n✅ Total leads scraped: ${fresh.length}`)
+  // Filter out results that clearly don't match the searched business type
+  const relevant = contactable.filter(lead => isRelevantToSearch(lead, businessType))
+  const filtered = relevant.length > 0 ? relevant : contactable // fallback to all if filter too aggressive
+
+  const fresh = shuffleArray(filtered).slice(0, maxResults)
+
+  console.log(`\n✅ Total leads scraped: ${fresh.length} (filtered from ${contactable.length})`)
   return fresh
 }
 
