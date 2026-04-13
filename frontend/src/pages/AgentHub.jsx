@@ -59,8 +59,20 @@ function ApprovalCard({ item, onApprove, onReject, busy }) {
   )
 }
 
+function normalizeAgentStatus(payload) {
+  const status = payload?.status || payload?.state || 'offline'
+  const running = typeof payload?.running === 'boolean' ? payload.running : status === 'running'
+
+  return {
+    ...payload,
+    status,
+    running,
+    tickCount: payload?.tickCount || 0,
+  }
+}
+
 export default function AgentHub() {
-  const [status, setStatus] = useState({ running: false, tickCount: 0 })
+  const [status, setStatus] = useState({ status: 'offline', running: false, tickCount: 0 })
   const [approvals, setApprovals] = useState([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -71,7 +83,7 @@ export default function AgentHub() {
     setConnectionError('')
     try {
       const statusRes = await agentApi.status()
-      setStatus(statusRes.data || { running: false, tickCount: 0 })
+      setStatus(normalizeAgentStatus(statusRes.data))
       setConnectionError('')
     } catch (err) {
       const msg = err.response?.data?.error || 'Agent unreachable. Check MARKETING_AGENT_URL and the agent service health.'

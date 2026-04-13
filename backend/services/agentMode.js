@@ -1,7 +1,7 @@
 const axios = require('axios')
 
 function isExternalAgentMode() {
-  return process.env.USE_EXTERNAL_AGENT === 'true' && !!getMarketingAgentUrl()
+  return process.env.FORCE_EXTERNAL_AGENT === 'true' && !!getMarketingAgentUrl()
 }
 
 function loadInProcessAgent() {

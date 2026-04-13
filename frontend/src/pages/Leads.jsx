@@ -70,6 +70,17 @@ function isContactable(lead) {
   return Boolean(lead?.email || lead?.phone || lead?.website)
 }
 
+function normalizeAgentStatus(payload) {
+  const status = payload?.status || payload?.state || 'offline'
+  const running = typeof payload?.running === 'boolean' ? payload.running : status === 'running'
+
+  return {
+    ...payload,
+    status,
+    running,
+  }
+}
+
 function SearchForm({ onResults, loading, setLoading }) {
   const [businessType, setBusinessType] = useState(localStorage.getItem('proxaly_default_business_type') || 'marketing agency')
   const [customBusinessType, setCustomBusinessType] = useState('')
@@ -423,7 +434,7 @@ export default function Leads() {
   const [newLeadIds, setNewLeadIds] = useState(new Set())
   const [activeLead, setActiveLead] = useState(null)
   // Marketing Agent integration
-  const [agentStatus, setAgentStatus] = useState({ status: 'offline' })
+  const [agentStatus, setAgentStatus] = useState({ status: 'offline', running: false })
   const [sendingToAgent, setSendingToAgent] = useState(false)
   const agentReachable = agentStatus.status !== 'offline'
 
@@ -434,7 +445,7 @@ export default function Leads() {
     const pollAgent = async () => {
       try {
         const res = await leadsApi.getAgentStatus()
-        setAgentStatus(res.data || { status: 'offline' })
+        setAgentStatus(normalizeAgentStatus(res.data))
         console.log('[Agent Status]', res.data)
       } catch (err) {
         console.warn('[Agent Status] Could not fetch:', err.message)
@@ -575,8 +586,8 @@ export default function Leads() {
         setTimeout(async () => {
           try {
             const status = await leadsApi.getAgentStatus()
-            setAgentStatus(status.data || { status: 'offline' })
-            if (status.data?.running) {
+            setAgentStatus(normalizeAgentStatus(status.data))
+            if (normalizeAgentStatus(status.data).running) {
               toast.success('🚀 Marketing Agent is now running!', { duration: 3000 })
             }
           } catch {

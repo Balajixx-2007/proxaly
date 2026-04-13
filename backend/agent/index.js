@@ -179,6 +179,7 @@ async function getStatus() {
 
   return {
     status: agentState.status,
+    running: agentState.status === 'running',
     startedAt: agentState.startedAt,
     tickCount: agentState.tickCount,
     uptime: agentState.startedAt ? Date.now() - agentState.startedAt : null,
@@ -227,6 +228,7 @@ async function updateConfig(key, value) {
 async function healthCheck() {
   return {
     status: agentState.status,
+    running: agentState.status === 'running',
     timestamp: new Date(),
     tickCount: agentState.tickCount,
     config_loaded: Object.keys(agentState.config).length > 0,

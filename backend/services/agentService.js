@@ -72,7 +72,7 @@ function normalizeConfigRecord(record) {
 async function initialize() {
   try {
     console.log('[Agent] Initializing agent service...');
-
+    running: agentState.status === 'running',
     agentState.config = { ...DEFAULT_AGENT_CONFIG };
 
     // Load config from database
@@ -120,7 +120,7 @@ async function start() {
       console.log('[Agent] Already running');
       return;
     }
-
+        running: agentState.status === 'running',
     console.log('[Agent] Starting agent service...');
 
     agentState.status = 'running';
