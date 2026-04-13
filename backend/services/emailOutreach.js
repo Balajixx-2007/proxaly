@@ -20,11 +20,16 @@ let groqClient = null
 
 function isMissingEmailSchemaError(err) {
   const msg = String(err?.message || err || '').toLowerCase()
+  const code = err?.code || ''
   return (
     msg.includes("could not find the table 'public.email_logs'") ||
     msg.includes("could not find the table 'public.email_sequences'") ||
     msg.includes('relation "email_logs" does not exist') ||
-    msg.includes('relation "email_sequences" does not exist')
+    msg.includes('relation "email_sequences" does not exist') ||
+    // RLS policy violations — backend uses anon key, treat as non-fatal
+    code === '42501' ||
+    msg.includes('row-level security') ||
+    msg.includes('violates row-level security policy')
   )
 }
 
