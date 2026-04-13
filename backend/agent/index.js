@@ -21,23 +21,48 @@ let agentState = {
   config: {},
 };
 
+const DEFAULT_AGENT_CONFIG = {
+  agent_status: 'stopped',
+  approval_mode_enabled: true,
+  tick_interval_ms: 30000,
+  imap_check_enabled: false,
+  imap_check_interval_ms: 60000,
+  email_provider: 'brevo',
+};
+
+function isMissingAgentConfigError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return error?.code === '42P01'
+    || error?.code === 'PGRST205'
+    || (message.includes('agent_config') && (message.includes('does not exist') || message.includes('relation')));
+}
+
+function parseConfigValue(record) {
+  let value = record.value;
+  if (record.value_type === 'boolean') value = record.value === 'true' || record.value === '1';
+  else if (record.value_type === 'number') value = parseInt(record.value, 10);
+  return value;
+}
+
 async function initialize() {
   try {
     console.log('[Agent] Initializing Phase 2 agent services...');
+
+    agentState.config = { ...DEFAULT_AGENT_CONFIG };
 
     // Load config from database
     const { data: configRecords, error: configErr } = await supabase
       .from('agent_config')
       .select('key, value, value_type');
 
-    if (configErr) throw configErr;
-
-    agentState.config = {};
-    for (const rec of configRecords || []) {
-      let value = rec.value;
-      if (rec.value_type === 'boolean') value = rec.value === 'true';
-      else if (rec.value_type === 'number') value = parseInt(rec.value, 10);
-      agentState.config[rec.key] = value;
+    if (configErr) {
+      if (!isMissingAgentConfigError(configErr)) throw configErr;
+      console.warn('[Agent] agent_config table is missing, using defaults');
+      captureMessage('agent_config_missing_defaults_used', { context: 'agent_phase2_init' });
+    } else {
+      for (const rec of configRecords || []) {
+        agentState.config[rec.key] = parseConfigValue(rec);
+      }
     }
 
     // Initialize sub-services
@@ -170,6 +195,15 @@ async function getStatus() {
 async function updateConfig(key, value) {
   try {
     const stringValue = String(value);
+
+    if (!agentState.config) {
+      agentState.config = { ...DEFAULT_AGENT_CONFIG };
+    }
+
+    if (key in DEFAULT_AGENT_CONFIG) {
+      agentState.config[key] = value;
+    }
+
     const { error } = await supabase
       .from('agent_config')
       .update({ value: stringValue, updated_at: new Date() })
@@ -180,6 +214,12 @@ async function updateConfig(key, value) {
     return true;
   } catch (err) {
     console.error(`[Agent] Update config ${key} failed:`, err);
+
+    if (isMissingAgentConfigError(err)) {
+      agentState.config[key] = value;
+      return true;
+    }
+
     return false;
   }
 }

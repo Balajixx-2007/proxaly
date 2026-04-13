@@ -17,6 +17,44 @@ const { captureException, captureMessage } = require('../services/monitoring');
 
 let tickInProgress = false;
 
+const DEFAULT_TICK_CONFIG = {
+  approval_mode_enabled: true,
+  imap_check_enabled: false,
+};
+
+function isMissingAgentConfigError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return error?.code === '42P01'
+    || error?.code === 'PGRST205'
+    || (message.includes('agent_config') && (message.includes('does not exist') || message.includes('relation')));
+}
+
+async function getConfigValue(key, defaultValue) {
+  try {
+    const { data, error } = await supabase
+      .from('agent_config')
+      .select('value')
+      .eq('key', key)
+      .single();
+
+    if (error) {
+      if (isMissingAgentConfigError(error)) {
+        return defaultValue;
+      }
+      throw error;
+    }
+
+    if (data?.value === 'true' || data?.value === true) return true;
+    if (data?.value === 'false' || data?.value === false) return false;
+    return data?.value ?? defaultValue;
+  } catch (err) {
+    if (isMissingAgentConfigError(err)) {
+      return defaultValue;
+    }
+    throw err;
+  }
+}
+
 async function tick() {
   if (tickInProgress) {
     console.log('[Tick] Tick already in progress, skipping');
@@ -31,13 +69,7 @@ async function tick() {
     console.log('[Tick] Starting agent tick...');
 
     // Get config (approval mode enabled?)
-    const { data: configRec } = await supabase
-      .from('agent_config')
-      .select('value')
-      .eq('key', 'approval_mode_enabled')
-      .single();
-
-    const approvalModeEnabled = configRec?.value === 'true' || configRec?.value === true;
+    const approvalModeEnabled = await getConfigValue('approval_mode_enabled', DEFAULT_TICK_CONFIG.approval_mode_enabled);
 
     // Get pending leads
     const pendingLeads = await queue.getPendingLeads(50);
@@ -94,13 +126,9 @@ async function tick() {
     }
 
     // Check for replies (if IMAP enabled)
-    const { data: imapEnabled } = await supabase
-      .from('agent_config')
-      .select('value')
-      .eq('key', 'imap_check_enabled')
-      .single();
+    const imapEnabled = await getConfigValue('imap_check_enabled', DEFAULT_TICK_CONFIG.imap_check_enabled);
 
-    if (imapEnabled?.value === 'true') {
+    if (imapEnabled === true) {
       try {
         const replies = await imap.checkInbox();
         console.log(`[Tick] Found ${replies.length} replies`);
