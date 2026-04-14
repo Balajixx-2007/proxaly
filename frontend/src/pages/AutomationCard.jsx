@@ -91,7 +91,7 @@ export default function AutomationCard() {
           <strong>Leads Today:</strong> {status.totalLeadsToday || 0}
         </p>
         <p style={{ margin: '6px 0', color: 'rgba(148,163,184,0.8)' }}>
-          <strong>Sent to Agent:</strong> {status.totalSentToday || 0}
+          <strong>Saved Today:</strong> {status.totalSavedToday || 0}
         </p>
       </div>
       <div style={{ display: 'flex', gap: 8, flexDirection: 'row', marginBottom: 10 }}>

@@ -253,19 +253,7 @@ Choose ONE of the above options:
 - ✅ Email tags for better filtering
 - ✅ Sender verification check
 
-**Use improved service:**
-```javascript
-const email = require('./agent/emailEnhanced');
-
-// Same interface as before
-await email.send(lead, {
-  subject: 'Test',
-  body: 'Hello!'
-});
-
-// New feature: verify sender before sending
-await email.verifySender(); // Returns true if verified
-```
+**Use the current email service implementation** rather than the retired agent folder. The active send flow lives under the backend email routes and services.
 
 ---
 

@@ -135,7 +135,7 @@ export default function Automation() {
           Automation
         </h1>
         <p style={{ color: 'rgba(148,163,184,0.6)', marginTop: 4, fontSize: 14 }}>
-          Auto-scrape, enrich and send quality leads to your Marketing Agent on a schedule.
+          Auto-scrape, enrich and save quality leads on a schedule.
         </p>
       </div>
 
@@ -203,7 +203,7 @@ export default function Automation() {
       {status && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 20 }}>
           <StatCard label="Leads Today" value={status.totalLeadsToday || 0} color="#a78bfa" />
-          <StatCard label="Sent to Agent" value={status.totalSentToday || 0} color="#4ade80" />
+          <StatCard label="Saved Today" value={status.totalSavedToday || 0} color="#4ade80" />
           <StatCard label="Min Score" value={`${status.minScore}/10`} color="#fbbf24" />
           <StatCard label="Targets" value={status.targets?.length || 0} color="#22d3ee" />
         </div>

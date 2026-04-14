@@ -88,10 +88,10 @@ async function sendEmail() {
     const info = await transporter.sendMail({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: `${TO_NAME} <${TO_EMAIL}>`,
-      subject: '✅ Proxaly Marketing Agent - SMTP Test Email',
+      subject: '✅ Proxaly - SMTP Test Email',
       text: `Hello ${TO_NAME},
 
-This is a test email from Proxaly Marketing Agent.
+This is a test email from Proxaly.
 
 ✅ If you received this, the email system is working!
 
@@ -108,13 +108,13 @@ This is an automated message.`,
       <h2 style="color: #1a73e8; margin-top: 0;">Hello ${TO_NAME}! 👋</h2>
       
       <p style="font-size: 16px; line-height: 1.6;">
-        This is a test email from <strong>Proxaly Marketing Agent</strong>.
+        This is a test email from <strong>Proxaly</strong>.
       </p>
       
       <div style="background: #e8f5e9; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4caf50;">
         <h3 style="margin-top: 0; color: #2e7d32;">✅ Email System Status</h3>
         <p><strong>Status:</strong> Working!</p>
-        <p><strong>Service:</strong> Proxaly Agent Phase 2</p>
+        <p><strong>Service:</strong> Proxaly Email Delivery</p>
         <p><strong>Sent at:</strong> ${new Date().toISOString()}</p>
       </div>
       

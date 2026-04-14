@@ -70,45 +70,6 @@ do $$ begin
   end if;
 end $$;
 
-create table if not exists agent_queue (
-  id uuid primary key default uuid_generate_v4(),
-  user_id uuid references auth.users(id) on delete cascade,
-  lead_id uuid,
-  payload jsonb not null,
-  retries int default 0,
-  status text default 'pending',
-  created_at timestamptz default now()
-);
-
-alter table if exists agent_queue
-  add column if not exists user_id uuid references auth.users(id) on delete cascade,
-  add column if not exists lead_id uuid,
-  add column if not exists payload jsonb,
-  add column if not exists retries int default 0,
-  add column if not exists status text default 'pending',
-  add column if not exists created_at timestamptz default now();
-
-update agent_queue set payload = '{}'::jsonb where payload is null;
-alter table agent_queue alter column payload set not null;
-
-create index if not exists idx_agent_queue_status_created
-  on agent_queue(status, created_at asc);
-
-create index if not exists idx_agent_queue_lead_id
-  on agent_queue(lead_id);
-
-alter table if exists agent_queue enable row level security;
-
-do $$ begin
-  if not exists (select 1 from pg_policies where tablename = 'agent_queue' and policyname = 'agent_queue_owner_all') then
-    create policy "agent_queue_owner_all"
-      on agent_queue
-      for all
-      using (auth.uid() = user_id)
-      with check (auth.uid() = user_id);
-  end if;
-end $$;
-
 create table if not exists email_sequences (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null references auth.users(id) on delete cascade,

@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import {
   Search, Download,
   Globe, Phone, MapPin, Sparkles, Loader2, Trash2,
-  RefreshCw, Mail, Send, MoreVertical
+  RefreshCw, Mail, MoreVertical
 } from 'lucide-react'
 
 const STATUS_OPTIONS = ['new', 'contacted', 'converted']
@@ -68,17 +68,6 @@ function getContactReadiness(lead) {
 function isContactable(lead) {
   if (typeof lead?.contactable === 'boolean') return lead.contactable
   return Boolean(lead?.email || lead?.phone || lead?.website)
-}
-
-function normalizeAgentStatus(payload) {
-  const status = payload?.status || payload?.state || 'offline'
-  const running = typeof payload?.running === 'boolean' ? payload.running : status === 'running'
-
-  return {
-    ...payload,
-    status,
-    running,
-  }
 }
 
 function SearchForm({ onResults, loading, setLoading }) {
@@ -208,7 +197,7 @@ function SearchForm({ onResults, loading, setLoading }) {
   )
 }
 
-function LeadRow({ lead, onStatusChange, onFindEmail, onDelete, selected, onSelect, onSendToAgent, onOpenLead, isNew, agentReachable }) {
+function LeadRow({ lead, onStatusChange, onFindEmail, onDelete, selected, onSelect, onOpenLead, isNew }) {
   const [findingEmail, setFindingEmail] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const contactScore = getContactScore(lead)
@@ -217,15 +206,6 @@ function LeadRow({ lead, onStatusChange, onFindEmail, onDelete, selected, onSele
   const handleFindEmail = async () => {
     setFindingEmail(true)
     try { await onFindEmail(lead.id) } finally { setFindingEmail(false) }
-  }
-
-  const handleSendOne = async () => {
-    if (!agentReachable) {
-      toast.error('Marketing Agent is unreachable. Check agent mode configuration and service health.')
-      return
-    }
-    setShowMenu(false)
-    await onSendToAgent([lead.id])
   }
 
   return (
@@ -390,14 +370,6 @@ function LeadRow({ lead, onStatusChange, onFindEmail, onDelete, selected, onSele
               borderRadius: 6, padding: '4px 0', zIndex: 100, minWidth: 140,
               boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
             }}>
-              <button onClick={handleSendOne} disabled={!agentReachable} title={!agentReachable ? 'Marketing Agent is unreachable. Check agent mode configuration and service health.' : ''} style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
-                width: '100%', border: 'none', background: 'transparent', color: '#a78bfa',
-                cursor: agentReachable ? 'pointer' : 'not-allowed', fontSize: 12, textAlign: 'left',
-                opacity: agentReachable ? 1 : 0.55
-              }}>
-                <Send size={12} /> Send to Agent
-              </button>
               <button onClick={() => { onOpenLead(lead); setShowMenu(false) }} style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
                 width: '100%', border: 'none', background: 'transparent', color: '#22d3ee',
@@ -433,31 +405,8 @@ export default function Leads() {
   const [onlyContactable, setOnlyContactable] = useState(true)
   const [newLeadIds, setNewLeadIds] = useState(new Set())
   const [activeLead, setActiveLead] = useState(null)
-  // Marketing Agent integration
-  const [agentStatus, setAgentStatus] = useState({ status: 'stopped', running: false })
-  const [sendingToAgent, setSendingToAgent] = useState(false)
-  // Agent is reachable if backend returned a valid response (status is 'stopped' or 'running', not 'offline')
-  const agentReachable = agentStatus.status === 'stopped' || agentStatus.status === 'running' || agentStatus.running === true
 
   useEffect(() => { fetchLeads() }, [])
-
-  // Poll agent status every 30 seconds
-  useEffect(() => {
-    const pollAgent = async () => {
-      try {
-        const res = await leadsApi.getAgentStatus()
-        setAgentStatus(normalizeAgentStatus(res.data))
-        console.log('[Agent Status]', res.data)
-      } catch (err) {
-        console.warn('[Agent Status] Could not fetch:', err.message)
-        setAgentStatus({ status: 'offline' })
-      }
-    }
-
-    pollAgent() // Poll immediately
-    const interval = setInterval(pollAgent, 30000) // Then every 30s
-    return () => clearInterval(interval)
-  }, [])
 
   async function fetchLeads() {
     setFetching(true)
@@ -547,73 +496,6 @@ export default function Leads() {
       await leadsApi.delete(id)
     } catch {
       toast.error('Failed to delete')
-    }
-  }
-
-  const handleSendToAgent = async (leadIds) => {
-    if (!leadIds || leadIds.length === 0) {
-      return toast.error('Select leads first')
-    }
-
-    const selectedLeads = leads.filter(l => leadIds.includes(l.id))
-    const emailable = selectedLeads.filter(l => l.email)
-    const skipped = selectedLeads.length - emailable.length
-
-    if (emailable.length === 0) {
-      return toast.error('No selected leads have email addresses')
-    }
-
-    if (skipped > 0) {
-      toast(`Skipping ${skipped} lead(s) without email`, { icon: '⚠️' })
-    }
-
-    setSendingToAgent(true)
-    try {
-      const emailableIds = emailable.map(l => l.id)
-      console.log(`Sending ${emailableIds.length} lead(s) to Marketing Agent...`)
-      const res = await leadsApi.sendToAgent(emailableIds)
-      const { sent, failed, total, errors } = res.data || {}
-
-      if (sent && sent > 0) {
-        toast.success(`✅ ${sent} lead${sent !== 1 ? 's' : ''} sent to Marketing Agent!`, { duration: 4000 })
-        console.log(`[Marketing Agent] Successfully sent ${sent}/${total} leads`)
-        
-        // Clear selection after success
-        if (leadIds.every(id => selected.has(id))) {
-          setSelected(new Set())
-        }
-        
-        // Poll agent status to verify it started
-        setTimeout(async () => {
-          try {
-            const status = await leadsApi.getAgentStatus()
-            setAgentStatus(normalizeAgentStatus(status.data))
-            if (normalizeAgentStatus(status.data).running) {
-              toast.success('🚀 Marketing Agent is now running!', { duration: 3000 })
-            }
-          } catch {
-            // Silently fail if can't check status
-          }
-        }, 1000)
-      }
-
-      if (failed && failed > 0) {
-        const firstError = Array.isArray(errors) && errors.length > 0 ? String(errors[0]) : ''
-        const likelyAgentIssue = /econnrefused|enotfound|timeout|network|unreachable|503|500/i.test(firstError)
-
-        if (likelyAgentIssue) {
-          toast.error(`⚠️ Failed to send ${failed} lead(s). Marketing Agent service is unreachable.`, { duration: 5000 })
-        } else if (firstError) {
-          toast.error(`⚠️ Failed to send ${failed} lead(s). ${firstError}`, { duration: 5000 })
-        } else {
-          toast.error(`⚠️ Failed to send ${failed} lead(s).`, { duration: 4000 })
-        }
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to send leads. Is Marketing Agent running?', { duration: 5000 })
-      console.error('[Send to Agent Error]', err.message)
-    } finally {
-      setSendingToAgent(false)
     }
   }
 
@@ -814,24 +696,6 @@ export default function Leads() {
           ))}
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {/* Agent Status Indicator */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
-            borderRadius: 6, background: 'rgba(139,92,246,0.08)',
-            border: '1px solid rgba(139,92,246,0.15)', fontSize: 12
-          }}>
-            <div style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: agentStatus.status === 'offline' ? '#22c55e' : '#4ade80',
-              boxShadow: agentStatus.status === 'offline' ? '0 0 0 2px rgba(34,197,94,0.2)' : '0 0 0 2px rgba(74,222,128,0.2)'
-            }}></div>
-            <span style={{ color: '#4ade80' }}>
-              {agentStatus.status === 'offline'
-                ? 'System Ready (Agent not connected)'
-                : `AI Ready (${(agentStatus.tickCount || 0)} ticks)`}
-            </span>
-          </div>
-          
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(148,163,184,0.75)' }}>
             <input
               type="checkbox"
@@ -848,25 +712,6 @@ export default function Leads() {
             </button>
           )}
 
-          {selected.size > 0 && (
-            <button
-              onClick={() => handleSendToAgent([...selected])}
-              disabled={sendingToAgent || !agentReachable}
-              id="send-to-agent"
-              title={!agentReachable ? 'Marketing Agent is unreachable. Check agent mode configuration and service health.' : ''}
-              style={{
-                padding: '8px 14px', fontSize: 13, fontWeight: 500,
-                background: 'linear-gradient(135deg, #a78bfa, #8b5cf6)',
-                border: 'none', borderRadius: 6, color: '#fff',
-                cursor: (sendingToAgent || !agentReachable) ? 'not-allowed' : 'pointer',
-                opacity: (sendingToAgent || !agentReachable) ? 0.55 : 1,
-                display: 'flex', alignItems: 'center', gap: 6
-              }}
-            >
-              {sendingToAgent ? <Loader2 size={14} className="spinner" /> : <Send size={14} />}
-              Send {selected.size} to Agent
-            </button>
-          )}
           {selected.size > 0 && (
             <button
               onClick={handleBulkEnrich}
@@ -944,9 +789,7 @@ export default function Leads() {
                     onStatusChange={handleStatusChange}
                     onFindEmail={handleFindEmail}
                     onDelete={handleDelete}
-                    onSendToAgent={handleSendToAgent}
                     onOpenLead={setActiveLead}
-                    agentReachable={agentReachable}
                   />
                 ))}
               </tbody>
@@ -978,15 +821,13 @@ export default function Leads() {
               toast.success('Phone copied')
             }
           }}
-          onSendToAgent={async () => handleSendToAgent([activeLead.id])}
-          agentReachable={agentReachable}
         />
       )}
     </div>
   )
 }
 
-function LeadDetailModal({ lead, onClose, onCopyEmail, onCopyPhone, onSendToAgent, agentReachable }) {
+function LeadDetailModal({ lead, onClose, onCopyEmail, onCopyPhone }) {
   const outreachBody = lead.outreach_message || `Hi ${lead.name || 'there'},\n\nI came across your business and thought I should reach out. Let me know if you'd like to chat.`
   const mailto = lead.email
     ? `mailto:${lead.email}?subject=${encodeURIComponent(`Helping ${lead.name || 'your team'} get more clients`)}&body=${encodeURIComponent(outreachBody)}`
@@ -1043,9 +884,6 @@ function LeadDetailModal({ lead, onClose, onCopyEmail, onCopyPhone, onSendToAgen
             Status: <span style={{ color: '#e2e8f0' }}>{lead.status || 'new'}</span>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn btn-ghost" onClick={() => onSendToAgent()} disabled={!agentReachable} title={!agentReachable ? 'Marketing Agent is unreachable' : ''}>
-              Send to Agent
-            </button>
             <button className="btn btn-primary" onClick={onClose}>Done</button>
           </div>
         </div>

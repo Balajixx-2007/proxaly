@@ -4,22 +4,14 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import {
-  LayoutDashboard, Users, Megaphone, CreditCard, Settings,
-  LogOut, Zap, ChevronLeft, ChevronRight, Building2, BarChart2, MessageCircle, Palette, Mail, Bot
+  LayoutDashboard, Users, Settings,
+  LogOut, Zap, ChevronLeft, ChevronRight
 } from 'lucide-react'
 
 const NAV = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/leads', icon: Users, label: 'Leads' },
-  { to: '/campaigns', icon: Megaphone, label: 'Campaigns' },
-  { to: '/clients', icon: Building2, label: 'Clients' },
-  { to: '/email', icon: Mail, label: 'Email' },
-  { to: '/channels', icon: MessageCircle, label: 'Channels' },
-  { to: '/analytics', icon: BarChart2, label: 'Analytics' },
-  { to: '/branding', icon: Palette, label: 'Branding' },
-  { to: '/billing', icon: CreditCard, label: 'Billing' },
   { to: '/automation', icon: Zap, label: 'Automation' },
-  { to: '/agent', icon: Bot, label: 'Agent Hub' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 

@@ -16,7 +16,6 @@ const tests = [
   { method: 'get', path: '/api/auth/profile', expect: [401, 403] },
   { method: 'get', path: '/api/leads', expect: [401, 403] },
   { method: 'post', path: '/api/leads/scrape', data: { query: 'dentist in london' }, expect: [401, 403] },
-  { method: 'post', path: '/api/leads/send-to-agent', data: { leadIds: [] }, expect: [401, 403] },
   { method: 'get', path: '/api/leads/export', expect: [401, 403] },
 
   { method: 'get', path: '/api/campaigns', expect: [401, 403] },

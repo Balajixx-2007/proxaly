@@ -72,13 +72,13 @@ async function sendEmailViaSMTP() {
         address: BREVO_SENDER_EMAIL,
       },
       to: `${RECIPIENT_NAME} <${RECIPIENT_EMAIL}>`,
-      subject: 'Test Email via Brevo SMTP - Proxaly Marketing Agent',
+      subject: 'Test Email via Brevo SMTP - Proxaly',
       text: `Hello ${RECIPIENT_NAME},
 
 This is a test email sent via Brevo SMTP relay.
 
 Details:
-- Service: Proxaly Marketing Agent Phase 2
+- Service: Proxaly Email Delivery
 - Provider: Brevo SMTP Relay (not API)
 - Method: SMTP with proper authentication
 - Sent At: ${new Date().toISOString()}
@@ -100,7 +100,7 @@ This is an automated test message.`,
               <div style="background: #f5f5f5; padding: 15px; border-left: 4px solid #3b82f6; margin: 20px 0;">
                 <p><strong>Details:</strong></p>
                 <ul>
-                  <li>Service: Proxaly Marketing Agent Phase 2</li>
+                  <li>Service: Proxaly Email Delivery</li>
                   <li>Provider: Brevo SMTP Relay</li>
                   <li>Method: SMTP with proper authentication headers</li>
                   <li>Sent At: ${new Date().toISOString()}</li>

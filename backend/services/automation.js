@@ -1,18 +1,16 @@
 /**
  * Automation service — runs on schedule to generate and send leads
- * Scrapes -> Enriches -> Filters -> Dedupes -> Saves -> Sends to Marketing Agent
+ * Scrapes -> Enriches -> Filters -> Dedupes -> Saves
  * Supports pub/sub for SSE real-time log streaming
  */
 
 const cron = require('node-cron')
 const fs = require('fs')
 const path = require('path')
-const axios = require('axios')
 const { scrapeLeads } = require('./scraper')
 const { enrichLeadsBatch } = require('./groq')
 const { supabaseAdmin } = require('./supabase')
 const { LEAD_STATUS, statusIn, getLeadScore } = require('../utils/leadSchema')
-const agentQueue = require('./agentQueue')
 const { captureException } = require('./monitoring')
 const emailOutreach = require('./emailOutreach')
 
@@ -48,7 +46,8 @@ let automationState = {
   ],
   scheduleHours: 6,
   minScore: 7,
-  enabled: false
+  enabled: false,
+  totalSavedToday: 0,
 }
 
 // ── File paths ───────────────────────────────────────────────────────────────
@@ -56,7 +55,6 @@ const LOG_DIR = path.join(__dirname, '..', 'logs')
 const DATA_DIR = path.join(__dirname, '..', 'data')
 const LOG_FILE = path.join(LOG_DIR, 'automation.log')
 const STATE_FILE = path.join(DATA_DIR, 'automation-state.json')
-const MARKETING_AGENT_URL = (process.env.MARKETING_AGENT_URL || '').trim().replace(/\/$/, '')
 
 // Ensure directories exist
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
@@ -126,80 +124,6 @@ async function isDuplicate(lead) {
   }
 }
 
-// ── Send to Marketing Agent ───────────────────────────────────────────────────
-async function sendToMarketingAgent(lead) {
-  try {
-    if (!MARKETING_AGENT_URL) {
-      log('MARKETING_AGENT_URL not configured; skipping external Marketing Agent send', 'WARN')
-      return false
-    }
-
-    if (!lead.email) {
-      log(`Skipping ${lead.name} — no email`, 'WARN')
-      return false
-    }
-    const payload = {
-      name: lead.name || 'Unknown',
-      email: lead.email,
-      company: lead.city || lead.address || '',
-      phone: lead.phone || '',
-      website: lead.website || '',
-      observation: lead.summary || lead.outreach_message || ''
-    }
-    const res = await axios.post(`${MARKETING_AGENT_URL}/api/leads`, payload, {
-      timeout: 5000,
-      headers: { 'Content-Type': 'application/json' },
-      validateStatus: () => true,
-    })
-    if (res.status === 200 || res.status === 201) {
-      log(`Sent to Marketing Agent: ${lead.name} (${lead.email})`)
-      return true
-    }
-    log(`Marketing Agent rejected ${lead.name}: HTTP ${res.status}`, 'WARN')
-    return false
-  } catch (err) {
-    log(`Send error for ${lead.name}: ${err.message}`, 'WARN')
-    return false
-  }
-}
-
-async function enqueueFailedLead(lead, reason = 'send_failed') {
-  if (!lead?.email) return
-  try {
-    await agentQueue.enqueueLead({ ...lead, queue_reason: reason })
-  } catch (err) {
-    log(`Queue insert failed for ${lead.name}: ${err.message}`, 'ERROR')
-  }
-}
-
-async function retryQueuedLeads(limit = 50) {
-  let queue = []
-  try {
-    queue = await agentQueue.getPending(limit)
-  } catch (err) {
-    log(`Queue fetch failed: ${err.message}`, 'ERROR')
-    return
-  }
-
-  if (queue.length === 0) return
-
-  let sent = 0
-  for (const item of queue) {
-    const claimed = await agentQueue.claimPending(item.id)
-    if (!claimed) continue
-
-    const ok = await sendToMarketingAgent(claimed.payload)
-    if (ok) {
-      sent++
-      await agentQueue.markSent(claimed.id)
-      continue
-    }
-    await agentQueue.markFailed(claimed.id, claimed.retries, 5)
-  }
-
-  if (sent > 0) log(`Retried queue and delivered ${sent} lead(s)`, 'INFO')
-}
-
 // ── Main tick ─────────────────────────────────────────────────────────────────
 async function runAutomationTick() {
   if (automationState.currentlyRunning) {
@@ -212,8 +136,6 @@ async function runAutomationTick() {
   log('Automation tick started')
 
   try {
-    await retryQueuedLeads()
-
     // 1 — Scrape
     let allLeads = []
     const targets = automationState.targets
@@ -315,18 +237,8 @@ async function runAutomationTick() {
     }
 
     automationState.totalLeadsToday += newLeads.length
-
-    // 7 — Send to Marketing Agent
-    let sent = 0
-    for (const lead of newLeads) {
-      if (await sendToMarketingAgent(lead)) {
-        sent++
-      } else {
-        await enqueueFailedLead(lead)
-      }
-    }
-    log(`Sent ${sent} leads to Marketing Agent`)
-    automationState.totalSentToday += sent
+    automationState.totalSavedToday += saved?.length || 0
+    log(`Saved ${saved?.length || 0} lead(s) from this tick`)
 
     log('Automation tick complete', 'SUCCESS')
 
@@ -402,7 +314,7 @@ function getStatus() {
 // Reset daily counters at midnight
 cron.schedule('0 0 * * *', () => {
   automationState.totalLeadsToday = 0
-  automationState.totalSentToday = 0
+  automationState.totalSavedToday = 0
   saveState()
 })
 

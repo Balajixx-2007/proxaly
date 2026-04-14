@@ -45,9 +45,6 @@ export const leadsApi = {
   findEmail: (id) => api.post(`/leads/${id}/find-email`),
   bulkEnrich: (ids) => api.post('/leads/bulk-enrich', { ids }),
   export: (params) => api.get('/leads/export', { params, responseType: 'blob' }),
-  // Marketing Agent integration
-  sendToAgent: (leadIds) => api.post('/leads/send-to-agent', { leadIds }),
-  getAgentStatus: () => api.get('/agent/status'),
 }
 
 // ----- Campaigns -----
@@ -69,16 +66,6 @@ export const emailApi = {
   bulk: (body) => api.post('/email/bulk', body),
   schedule: (body) => api.post('/email/schedule', body),
   logs: (params) => api.get('/email/logs', { params }),
-}
-
-// ----- Marketing Agent -----
-export const agentApi = {
-  status: () => api.get('/agent/status'),
-  start: () => api.post('/agent/start'),
-  stop: () => api.post('/agent/stop'),
-  approvals: () => api.get('/agent/approvals'),
-  approve: (leadId) => api.post(`/agent/approvals/${leadId}/approve`),
-  reject: (leadId) => api.post(`/agent/approvals/${leadId}/reject`),
 }
 
 // ----- Auth -----

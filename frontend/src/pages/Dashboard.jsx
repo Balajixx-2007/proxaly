@@ -2,8 +2,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { leadsApi, campaignsApi } from '../lib/api'
-import { Users, Megaphone, Zap, Plus, ArrowRight, Target, Activity } from 'lucide-react'
+import { leadsApi } from '../lib/api'
+import { Users, Zap, ArrowRight, Target, Activity } from 'lucide-react'
 import AutomationCard from './AutomationCard'
 
 function StatCard({ icon: Icon, label, value, sub, color = '#a78bfa', delta }) {
@@ -60,7 +60,7 @@ function RecentLead({ lead }) {
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const [stats, setStats] = useState({ leads: 0, campaigns: 0, contacted: 0, converted: 0 })
+  const [stats, setStats] = useState({ leads: 0, contactable: 0, enriched: 0, newToday: 0 })
   const [recentLeads, setRecentLeads] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -71,20 +71,26 @@ export default function Dashboard() {
   async function loadData() {
     setLoading(true)
     try {
-      const [leadsRes, campaignsRes] = await Promise.all([
-        leadsApi.list({ limit: 5, orderBy: 'created_at', order: 'desc' }),
-        campaignsApi.list(),
-      ])
+      const leadsRes = await leadsApi.list({ limit: 200, orderBy: 'created_at', order: 'desc' })
       const allLeads = leadsRes.data?.leads || []
-      const campaigns = campaignsRes.data?.campaigns || []
       const totalLeads = leadsRes.data?.total || allLeads.length
+
+      const now = Date.now()
+      const dayMs = 24 * 60 * 60 * 1000
+      const newToday = allLeads.filter(l => {
+        const createdAt = l?.created_at ? Date.parse(l.created_at) : NaN
+        return Number.isFinite(createdAt) && (now - createdAt) <= dayMs
+      }).length
+
+      const contactable = allLeads.filter(l => Boolean(l?.email || l?.phone || l?.website)).length
+      const enriched = allLeads.filter(l => Number.isFinite(Number(l?.ai_score))).length
 
       setRecentLeads(allLeads.slice(0, 5))
       setStats({
         leads: totalLeads,
-        campaigns: campaigns.length,
-        contacted: allLeads.filter(l => l.status === 'contacted').length,
-        converted: allLeads.filter(l => l.status === 'converted').length,
+        contactable,
+        enriched,
+        newToday,
       })
     } catch (loadErr) {
       // Backend might not be running — show zeros gracefully
@@ -101,7 +107,7 @@ export default function Dashboard() {
     return 'Good evening'
   }
 
-  const convRate = stats.leads > 0 ? ((stats.converted / stats.leads) * 100).toFixed(1) : '0.0'
+  const contactableRate = stats.leads > 0 ? ((stats.contactable / stats.leads) * 100).toFixed(1) : '0.0'
 
   return (
     <div>
@@ -111,7 +117,7 @@ export default function Dashboard() {
           {greeting()}, <span className="gradient-text">{user?.email?.split('@')[0]}</span> 👋
         </h1>
         <p style={{ color: 'rgba(148,163,184,0.6)', marginTop: 6 }}>
-          Here's what's happening with your contact-ready prospect pipeline today.
+          Here's what's happening with your lead pipeline today.
         </p>
       </div>
 
@@ -124,9 +130,9 @@ export default function Dashboard() {
         ) : (
           <>
             <StatCard icon={Users} label="Total Leads" value={stats.leads} sub="All time" color="#a78bfa" delta={12} />
-            <StatCard icon={Megaphone} label="Campaigns" value={stats.campaigns} sub="Active" color="#22d3ee" />
-            <StatCard icon={Activity} label="Contacted" value={stats.contacted} sub="Outreach sent" color="#f59e0b" />
-            <StatCard icon={Target} label="Converted" value={`${convRate}%`} sub="Conversion rate" color="#4ade80" delta={3} />
+            <StatCard icon={Activity} label="Contactable" value={`${contactableRate}%`} sub={`${stats.contactable} with contact path`} color="#22d3ee" />
+            <StatCard icon={Target} label="Enriched" value={stats.enriched} sub="AI scored leads" color="#f59e0b" />
+            <StatCard icon={Zap} label="New Today" value={stats.newToday} sub="Last 24 hours" color="#4ade80" delta={3} />
           </>
         )}
       </div>
@@ -165,9 +171,9 @@ export default function Dashboard() {
                   <Zap size={16} /> Find New Leads
                 </button>
               </Link>
-              <Link to="/campaigns" style={{ textDecoration: 'none' }}>
+              <Link to="/automation" style={{ textDecoration: 'none' }}>
                 <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center' }}>
-                  <Plus size={16} /> New Campaign
+                  <Zap size={16} /> Open Automation
                 </button>
               </Link>
             </div>
@@ -176,33 +182,31 @@ export default function Dashboard() {
           {/* Automation Card */}
           <AutomationCard />
 
-          {/* Plan badge */}
+          {/* Lead quality snapshot */}
           <div style={{
             background: 'linear-gradient(135deg, rgba(124,58,237,0.15), rgba(34,211,238,0.1))',
             border: '1px solid rgba(139,92,246,0.25)', borderRadius: 12, padding: '20px'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <Zap size={16} color="#a78bfa" />
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#a78bfa' }}>Free Plan</span>
+              <Target size={16} color="#a78bfa" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#a78bfa' }}>Lead Quality Snapshot</span>
             </div>
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'rgba(148,163,184,0.6)', marginBottom: 6 }}>
-                <span>Leads used</span>
-                <span>{stats.leads}/50</span>
+                <span>Enrichment coverage</span>
+                <span>{stats.enriched}/{stats.leads || 0}</span>
               </div>
               <div style={{ height: 6, background: 'rgba(139,92,246,0.15)', borderRadius: 3 }}>
                 <div style={{
-                  height: '100%', width: `${Math.min((stats.leads / 50) * 100, 100)}%`,
+                  height: '100%', width: `${stats.leads > 0 ? Math.min((stats.enriched / stats.leads) * 100, 100) : 0}%`,
                   background: 'linear-gradient(90deg, #7c3aed, #22d3ee)',
                   borderRadius: 3, transition: 'width 0.5s ease'
                 }} />
               </div>
             </div>
-            <Link to="/billing" style={{ textDecoration: 'none' }}>
-              <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', fontSize: 13 }}>
-                Upgrade to Pro
-              </button>
-            </Link>
+            <p style={{ margin: 0, fontSize: 12, color: 'rgba(148,163,184,0.65)' }}>
+              Focus on enrichment to improve contact-ready lead quality.
+            </p>
           </div>
         </div>
       </div>

@@ -25,7 +25,7 @@ console.log(`
 Step 1: Mark Email as "Not Spam"
    1. Open bb6010757@gmail.com
    2. Go to Spam folder
-   3. Find email from "Proxaly Marketing Agent"
+   3. Find email from "Proxaly"
    4. Click 3-dot menu (⋮) → "Report not spam"
    5. Click "Yes"
    ✓ Email moves to Inbox

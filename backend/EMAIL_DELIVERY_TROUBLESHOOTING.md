@@ -148,7 +148,7 @@ transporter.sendMail({
 
 ✅ Email sent from contact.problemx@gmail.com  
 ✅ Arrives in bb6010757@gmail.com inbox (primary, not spam)  
-✅ Contains "Proxaly Marketing Agent" subject  
+✅ Contains "Proxaly" subject  
 ✅ Proper sender information and branding  
 ✅ Message ID trackable in Brevo logs  
 
@@ -157,9 +157,9 @@ transporter.sendMail({
 ## Debug Logs
 
 Last test email details:
-- **From:** contact.problemx@gmail.com (Proxaly Marketing Agent)
+- **From:** contact.problemx@gmail.com (Proxaly)
 - **To:** Balaji <bb6010757@gmail.com>
-- **Subject:** Test Email from Proxaly Marketing Agent
+- **Subject:** Test Email from Proxaly
 - **Message ID:** 202604121600.46502122847@smtp-relay.mailin.fr
 - **Sent At:** 2026-04-12T16:00:51.838Z
 - **Status:** API accepted (200 OK)

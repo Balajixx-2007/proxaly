@@ -47,17 +47,3 @@ do $$ begin
   end if;
 end $$;
 
-create table if not exists agent_queue (
-  id uuid primary key default uuid_generate_v4(),
-  lead_id uuid,
-  payload jsonb not null,
-  retries int default 0,
-  status text default 'pending',
-  created_at timestamptz default now()
-);
-
-create index if not exists idx_agent_queue_status_created
-  on agent_queue(status, created_at asc);
-
-create index if not exists idx_agent_queue_lead_id
-  on agent_queue(lead_id);
