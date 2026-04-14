@@ -17,7 +17,7 @@ export const APP_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '') || 'https://prox
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000,
+  timeout: 300000, // Increased to 5 minutes to allow complex global multi-city scraping sweeps
 })
 
 // Attach Supabase JWT to every request

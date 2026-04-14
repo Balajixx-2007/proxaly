@@ -136,10 +136,19 @@ router.post('/scrape', requireAuth, scrapeLimiter, async (req, res) => {
     const cityVariations = getCityVariations(city)
 
     let scrapeAttempts = 0
-    // Limit to 2 variations to absolutely guarantee we do not breach the 60-second HTTP timeout 
+    const START_TIME = Date.now()
+    
     for (const currentCity of cityVariations) {
       if (unseenLeads.length >= targetMax) break
       if (scrapeAttempts >= 2) break
+      
+      // Global Emergency Exit: If the scraper has taken more than 40 seconds across its loops, 
+      // safely bail out and return whatever it found so far instead of letting the connection die!
+      if (Date.now() - START_TIME > 40000) {
+        console.warn('Approaching maximum safe HTTP timeout limit. Gracefully returning early!')
+        break
+      }
+      
       scrapeAttempts++
 
       const rawLeads = await scrapeLeads({
