@@ -75,6 +75,7 @@ function SearchForm({ onResults, loading, setLoading }) {
   const [customBusinessType, setCustomBusinessType] = useState('')
   const [city, setCity] = useState(localStorage.getItem('proxaly_default_city') || '')
   const [source, setSource] = useState('auto')
+  const [maxResults, setMaxResults] = useState(50)
   const [progress, setProgress] = useState(0)
 
   useEffect(() => {
@@ -100,11 +101,11 @@ function SearchForm({ onResults, loading, setLoading }) {
     }
     setLoading(true)
     try {
-      const res = await leadsApi.scrape({ businessType: resolvedBusinessType, city, source })
+      const res = await leadsApi.scrape({ businessType: resolvedBusinessType, city, source, maxResults })
       const leads = res.data?.leads || []
       const msg = res.data?.message || ''
       // Pass search context so table can filter to this search only
-      onResults(leads, { businessType: resolvedBusinessType, city: city.trim(), source })
+      onResults(leads, { businessType: resolvedBusinessType, city: city.trim(), source, maxResults })
       if (leads.length > 0) {
         toast.success(`Found ${leads.length} leads for "${resolvedBusinessType}" in ${city}!`, { icon: '🎯' })
       } else {
@@ -174,6 +175,18 @@ function SearchForm({ onResults, loading, setLoading }) {
           <option value="yellowpages">📋 Yellow Pages (US)</option>
           <option value="google_search">🔍 Google Search</option>
         </select>
+      </div>
+      <div style={{ flex: '1 1 100px' }}>
+        <label style={{ display: 'block', fontSize: 12, color: 'rgba(148,163,184,0.6)', marginBottom: 6 }}>
+          Max Leads
+        </label>
+        <input
+          type="number"
+          className="input"
+          value={maxResults}
+          onChange={e => setMaxResults(Math.min(300, Math.max(1, parseInt(e.target.value) || 50)))}
+          style={{ width: '100%' }}
+        />
       </div>
       <button
         id="search-leads"
@@ -402,7 +415,8 @@ export default function Leads() {
   const [textFilter, setTextFilter] = useState('')      // search box filter
   const [lastSearch, setLastSearch] = useState(null)   // { businessType, city }
   const [bulkEnriching, setBulkEnriching] = useState(false)
-  const [onlyContactable, setOnlyContactable] = useState(true)
+  const [onlyContactable, setOnlyContactable] = useState(false) // default to false to allow finding "dentist without website"
+  const [websiteFilter, setWebsiteFilter] = useState('all')
   const [newLeadIds, setNewLeadIds] = useState(new Set())
   const [activeLead, setActiveLead] = useState(null)
 
@@ -454,7 +468,7 @@ export default function Leads() {
         businessType: lastSearch.businessType,
         city: lastSearch.city,
         source: lastSearch.source || 'auto',
-        maxResults: 20,
+        maxResults: lastSearch.maxResults || 50,
       })
       handleResults(res.data?.leads || [], lastSearch)
     } catch (err) {
@@ -604,6 +618,11 @@ export default function Leads() {
     .filter(l => !onlyContactable || isContactable(l))
     .filter(l => filterStatus === 'all' || (l.status || 'new') === filterStatus)
     .filter(l => {
+      if (websiteFilter === 'has_website') return !!l.website
+      if (websiteFilter === 'no_website') return !l.website
+      return true
+    })
+    .filter(l => {
       if (!textFilter) return true
       const q = textFilter.toLowerCase()
       return (
@@ -673,6 +692,16 @@ export default function Leads() {
             <input type="checkbox" checked={onlyContactable} onChange={(e) => setOnlyContactable(e.target.checked)} />
             Only Contactable Leads
           </label>
+          <select
+            className="input"
+            value={websiteFilter}
+            onChange={e => setWebsiteFilter(e.target.value)}
+            style={{ padding: '6px 10px', fontSize: 12, width: 140 }}
+          >
+            <option value="all">Any Website</option>
+            <option value="has_website">Has Website</option>
+            <option value="no_website">No Website</option>
+          </select>
           {/* Status filters */}
           {['all', ...STATUS_OPTIONS].map(s => (
             <button

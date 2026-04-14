@@ -95,7 +95,7 @@ router.post('/scrape', requireAuth, scrapeLimiter, async (req, res) => {
       businessType: normalizedBusinessType,
       city: city.trim(),
       source,
-      maxResults: Math.min(Number(maxResults), 30),
+      maxResults: Math.min(Number(maxResults || 50), 300),
     })
 
     // Force correct business_type on all results (Google Maps sometimes assigns wrong categories)

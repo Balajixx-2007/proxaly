@@ -101,7 +101,8 @@ async function scrapeGoogleMaps(businessType, city, maxResults = 15) {
     await delay(3000)
 
     // Scroll the results panel to load more
-    for (let i = 0; i < 4; i++) {
+    const maxScrolls = Math.min(Math.ceil(maxResults / 4), 40)
+    for (let i = 0; i < maxScrolls; i++) {
       try {
         await page.evaluate(() => {
           // Try multiple selectors for the results feed
@@ -120,13 +121,13 @@ async function scrapeGoogleMaps(businessType, city, maxResults = 15) {
     }
 
     // Extract business data from the page
-    const results = await page.evaluate((query, city) => {
+    const results = await page.evaluate((query, city, maxRes) => {
       const items = []
 
       // Method 1: Feed-based results (most common layout)
       const feedItems = document.querySelectorAll('[role="feed"] > div[jsaction]')
       feedItems.forEach(card => {
-        if (items.length >= 20) return
+        if (items.length >= maxRes) return
         try {
           // Business name — from aria-label or heading
           const nameEl = card.querySelector('[aria-label]') ||
@@ -178,7 +179,7 @@ async function scrapeGoogleMaps(businessType, city, maxResults = 15) {
       // Method 2: If feed method returned nothing, try div.Nv2PK
       if (items.length === 0) {
         document.querySelectorAll('div.Nv2PK').forEach(card => {
-          if (items.length >= 20) return
+          if (items.length >= maxRes) return
           try {
             const nameEl = card.querySelector('.fontHeadlineSmall, .qBF1Pd, h3, a[aria-label]')
             let name = nameEl?.textContent?.trim() || nameEl?.getAttribute('aria-label')
@@ -194,7 +195,7 @@ async function scrapeGoogleMaps(businessType, city, maxResults = 15) {
       }
 
       return items
-    }, query, city)
+    }, query, city, maxResults)
 
     console.log(`  → Extracted ${results.length} raw results`)
 
@@ -276,7 +277,8 @@ async function scrapeJustdial(businessType, city, maxResults = 15) {
     }
 
     // Scroll to load more listings
-    for (let i = 0; i < 3; i++) {
+    const maxScrolls = Math.min(Math.ceil(maxResults / 10), 20)
+    for (let i = 0; i < maxScrolls; i++) {
       await page.evaluate(() => window.scrollBy(0, 800))
       await delay(1000)
     }
