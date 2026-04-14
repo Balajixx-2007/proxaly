@@ -18,9 +18,37 @@ const { normalizeLeadStatus } = require('../utils/leadSchema')
 
 const scrapeLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 5,
+  max: 10,
   message: { error: 'Too many scrape requests. Please wait 1 minute.' },
 })
+
+const TOP_US_CITIES = [
+  'New York, NY', 'Los Angeles, CA', 'Chicago, IL', 'Houston, TX', 'Phoenix, AZ', 
+  'Philadelphia, PA', 'San Antonio, TX', 'San Diego, CA', 'Dallas, TX', 'San Jose, CA',
+  'Austin, TX', 'Jacksonville, FL', 'Columbus, OH', 'Indianapolis, IN', 'Seattle, WA',
+  'Denver, CO', 'Washington, DC', 'Boston, MA', 'Nashville, TN', 'Las Vegas, NV',
+  'Miami, FL', 'Atlanta, GA', 'Portland, OR', 'Detroit, MI', 'Charlotte, NC'
+]
+
+function getCityVariations(city) {
+  const c = city.toLowerCase().trim()
+  if (['usa', 'us', 'united states', 'united states of america', 'america'].includes(c)) {
+    return [...TOP_US_CITIES].sort(() => Math.random() - 0.5)
+  }
+  
+  // Specific city (like New York): Google Maps caps local results to ~60. 
+  // We append geographical quadrants to force the map view to pan and yield completely new sets.
+  const variations = [
+    city,
+    `${city} North`,
+    `${city} South`,
+    `${city} East`,
+    `${city} West`,
+    `${city} downtown`,
+    `${city} suburbs`
+  ]
+  return variations.sort(() => Math.random() - 0.5)
+}
 
 function normalizeName(name) {
   return String(name || '')
@@ -89,54 +117,63 @@ router.post('/scrape', requireAuth, scrapeLimiter, async (req, res) => {
 
 
   const normalizedBusinessType = businessType.trim().toLowerCase()
+  const targetMax = Math.min(Number(maxResults || 50), 300)
 
   try {
-    const rawLeads = await scrapeLeads({
-      businessType: normalizedBusinessType,
-      city: city.trim(),
-      source,
-      maxResults: Math.min(Number(maxResults || 50), 300),
-    })
-
-    // Force correct business_type on all results (Google Maps sometimes assigns wrong categories)
-    const normalizedRaw = rawLeads.map(lead => ({
-      ...lead,
-      business_type: normalizedBusinessType,
-    }))
-
-    const usableLeads = normalizedRaw.filter(isUsableLead)
-
-    if (!usableLeads.length) {
-      return res.json({ leads: [], message: 'No leads found. Try a different source or search term.' })
-    }
-
     const db = getClient(req)
     const { data: existing, error: existingError } = await db
       .from('leads')
       .select('name, website')
-      .limit(5000)
+      .limit(10000)
 
     if (existingError) throw existingError
 
     const seenKeys = new Set((existing || []).flatMap(dedupeMarkers))
     const localKeys = new Set()
     const unseenLeads = []
-    for (const lead of usableLeads) {
-      const markers = dedupeMarkers(lead)
-      if (markers.length === 0) continue
-      if (markers.some(marker => seenKeys.has(marker) || localKeys.has(marker))) continue
-      markers.forEach(marker => localKeys.add(marker))
-      unseenLeads.push(lead)
+    
+    // Automatically widen the search if they ask for broad places like USA
+    const cityVariations = getCityVariations(city)
+
+    let scrapeAttempts = 0
+    // Try up to 3 variations to hit the requested maxResults without duplicates
+    for (const currentCity of cityVariations) {
+      if (unseenLeads.length >= targetMax) break
+      if (scrapeAttempts >= 3) break
+      scrapeAttempts++
+
+      const rawLeads = await scrapeLeads({
+        businessType: normalizedBusinessType,
+        city: currentCity,
+        source,
+        maxResults: targetMax + 40, // Pull a bit extra from scraper to account for duplicates
+      })
+
+      // Normalize and filter
+      const usableLeads = rawLeads
+        .map(lead => ({ ...lead, business_type: normalizedBusinessType, city: city.trim() })) // Keep original city name for consistency
+        .filter(isUsableLead)
+
+      // Deduplicate against database and current run
+      for (const lead of usableLeads) {
+        if (unseenLeads.length >= targetMax) break
+        const markers = dedupeMarkers(lead)
+        if (markers.length === 0) continue
+        if (markers.some(marker => seenKeys.has(marker) || localKeys.has(marker))) continue
+        
+        markers.forEach(marker => localKeys.add(marker))
+        unseenLeads.push(lead)
+      }
     }
 
     if (!unseenLeads.length) {
-      return res.json({ leads: [], message: 'No fresh leads found. Try Find New Leads again.' })
+      return res.json({ leads: [], message: 'No fresh leads found in this exact area! Try searching a completely different city or state.' })
     }
 
     const leadsToInsert = unseenLeads.map(lead => {
       const { contactable, ...persistable } = lead
       return {
-      ...persistable,
+        ...persistable,
       id: uuidv4(),
       user_id: req.user.id,
       }

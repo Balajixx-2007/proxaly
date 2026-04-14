@@ -199,11 +199,10 @@ async function scrapeGoogleMaps(businessType, city, maxResults = 15) {
 
     console.log(`  → Extracted ${results.length} raw results`)
 
-    const randomOffset = Math.floor(Math.random() * Math.min(5, Math.max(1, Math.floor(results.length / 3))))
-    const randomized = shuffleArray(results).slice(randomOffset)
+    const randomized = shuffleArray(results)
 
     for (const r of randomized) {
-      if (!r.name || leads.length >= maxResults) continue
+      if (!r.name) continue
       leads.push({
         id: uuidv4(),
         name: cleanName(r.name),
@@ -341,8 +340,7 @@ async function scrapeJustdial(businessType, city, maxResults = 15) {
 
     console.log(`  → Found ${items.length} Justdial listings`)
 
-    const randomOffset = Math.floor(Math.random() * Math.min(4, Math.max(1, Math.floor(items.length / 3))))
-    const randomized = shuffleArray(items).slice(randomOffset)
+    const randomized = shuffleArray(items)
 
     for (const item of randomized) {
       if (leads.length >= maxResults) break
@@ -428,8 +426,7 @@ async function scrapeYellowPages(businessType, city, maxResults = 15) {
       })
     })
 
-    const randomOffset = Math.floor(Math.random() * Math.min(4, Math.max(1, Math.floor(rows.length / 3))))
-    const randomized = shuffleArray(rows).slice(randomOffset)
+    const randomized = shuffleArray(rows)
     for (const row of randomized) {
       if (leads.length >= maxResults) break
       leads.push(row)
@@ -526,8 +523,7 @@ async function scrapeGoogleSearch(businessType, city, maxResults = 10) {
       })
     }
 
-    const randomOffset = Math.floor(Math.random() * Math.min(4, Math.max(1, Math.floor(rows.length / 3))))
-    const randomized = shuffleArray(rows).slice(randomOffset)
+    const randomized = shuffleArray(rows)
     for (const row of randomized) {
       if (leads.length >= maxResults) break
       leads.push(row)
@@ -962,7 +958,7 @@ async function scrapeLeads({ businessType, city, source = 'auto', maxResults = 1
   const relevant = contactable.filter(lead => isRelevantToSearch(lead, businessType))
   const filtered = relevant.length > 0 ? relevant : contactable // fallback to all if filter too aggressive
 
-  const fresh = shuffleArray(filtered).slice(0, maxResults)
+  const fresh = filtered
 
   console.log(`\n✅ Total leads scraped: ${fresh.length} (filtered from ${contactable.length})`)
   return fresh
