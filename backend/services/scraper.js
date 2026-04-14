@@ -908,7 +908,7 @@ async function scrapeLeads({ businessType, city, source = 'auto', maxResults = 1
   // Auto-select best source based on city
   let primarySource = source
   if (source === 'auto' || source === 'google_maps') {
-    primarySource = indian ? 'justdial' : 'yellowpages'
+    primarySource = indian ? 'justdial' : 'google_maps'
   }
 
   let leads = []

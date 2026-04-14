@@ -136,17 +136,18 @@ router.post('/scrape', requireAuth, scrapeLimiter, async (req, res) => {
     const cityVariations = getCityVariations(city)
 
     let scrapeAttempts = 0
-    // Try up to 3 variations to hit the requested maxResults without duplicates
+    // Limit to 2 variations to absolutely guarantee we do not breach the 60-second HTTP timeout 
     for (const currentCity of cityVariations) {
       if (unseenLeads.length >= targetMax) break
-      if (scrapeAttempts >= 3) break
+      if (scrapeAttempts >= 2) break
       scrapeAttempts++
 
       const rawLeads = await scrapeLeads({
         businessType: normalizedBusinessType,
         city: currentCity,
         source,
-        maxResults: targetMax + 40, // Pull a bit extra from scraper to account for duplicates
+        // Don't ask the scraper to endlessly scroll past 80 (since it takes 1s per page turn).
+        maxResults: Math.min(targetMax + 20, 80), 
       })
 
       // Normalize and filter
